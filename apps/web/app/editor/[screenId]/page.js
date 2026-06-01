@@ -26,9 +26,6 @@ import {
 } from "@/app/editor/types.js";
 import { generateSeatLabel } from "@/app/editor/seatNaming.js";
 import { useSeatTypes } from "@/app/editor/hooks/useSeatTypes.js";
-import SeatsLogo from "@/public/seats.webp";
-import Image from "next/image";
-import Link from "next/link";
 import { showToast } from "../components/Toast";
 import { FolderUp, X, Eye, EyeOff, Maximize2 } from "lucide-react";
 
@@ -1167,10 +1164,6 @@ const TopBar = ({ isPreviewVisible, onTogglePreview }) => {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 h-14 bg-neutral-950 border-b border-neutral-800 text-white flex items-center justify-between px-4">
       <div className="flex items-center gap-4">
-        <Link href="/" className="flex items-center">
-          <Image src={SeatsLogo} alt="Logo" width={70} height={70} />
-        </Link>
-        <div className="h-6 w-px bg-neutral-800" /> {/* Divider */}
         <h1 className="text-sm font-medium text-neutral-200">
           Seat Layout Editor
         </h1>
