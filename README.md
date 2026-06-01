@@ -1,5 +1,7 @@
 # Seat Layout
 
+![Seat Layout Builder](apps/web/public/seat-layout-builder-intro.webp)
+
 A seat-layout platform with a visual **editor**, a customer-facing **renderer**, and a
 clean, scalable **Go REST API** backed by PostgreSQL. Design a venue once, run many shows
 against it, and sell seats with concurrency-safe holds and bookings.
