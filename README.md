@@ -2,145 +2,62 @@
 
 ![Seat Layout Builder](apps/web/public/seat-layout-builder-intro.webp)
 
-A seat-layout platform with a visual **editor**, a customer-facing **renderer**, and a
-clean, scalable **Go REST API** backed by PostgreSQL. Design a venue once, run many shows
-against it, and sell seats with concurrency-safe holds and bookings.
+Design a venue once, run many shows against it, and sell seats safely even under heavy concurrency. Seat Layout pairs a visual editor and a customer renderer with a clean Go REST API backed by PostgreSQL.
 
 ```
 seat-layout/
 ├── apps/
-│   ├── web/        # Next.js 15 / React 19 — seat-layout editor + customer renderer
-│   └── api/        # Go backend — versioned /v1 REST API (system of record)
-├── Makefile        # dev / build / test / migrate targets
-├── docker-compose.yml   # local PostgreSQL 16
-└── .env.example    # configuration template
+│   ├── web/   Next.js 15 / React 19 editor and customer renderer
+│   └── api/   Go REST API, the system of record
+├── Makefile
+├── docker-compose.yml
+└── .env.example
 ```
 
----
+## Quick start
 
-## Quick start 
-
-Prerequisites: **Go 1.22+**, **Node + pnpm**, **Docker** (for Postgres).
+You'll need Go 1.22+, Node with pnpm, and Docker for Postgres.
 
 ```bash
 # 1. Database
-make db-up          # start Postgres (docker-compose) and wait until healthy
+make db-up          # start Postgres and wait until it's healthy
 make migrate        # apply schema migrations
 
-# 2. API  →  http://localhost:8080
+# 2. API → http://localhost:8080
 make api-dev
 
-# 3. Web  →  http://localhost:3000
-cp .env.example apps/web/.env.local    # sets NEXT_PUBLIC_API_BASE_URL
+# 3. Web → http://localhost:3000
+cp .env.example apps/web/.env.local
 make web-install
 make web-dev
 ```
 
-Health check: `curl http://localhost:8080/healthz` → `{"data":{"status":"ok"}}`
+Confirm it's alive with `curl http://localhost:8080/healthz`, which returns `{"data":{"status":"ok"}}`.
 
----
+## The apps
 
-## Applications
+### apps/api
 
-### `apps/api` — Go backend
+Built on the Go standard library (net/http with the Go 1.22 ServeMux), with pgx/v5 as the only outside dependency and PostgreSQL as the system of record. The layers point inward: handler, then service, then store, then postgres, all resting on a pure domain package that handles seat flattening and validation. Every response shares one envelope, `{"data": …}` on success and `{"error": {"code","message"}}` on failure. Holds and bookings rely on `SELECT … FOR UPDATE`, so a seat can never be sold twice. A stable resource model and a flat seat inventory endpoint let partners integrate without parsing the editor's scene graph. Auth sits behind an `AUTH_ENABLED` flag but does nothing yet. The full endpoint reference lives in apps/api/README.md.
 
-Built with the Go standard library (`net/http` + the Go 1.22 `ServeMux`); the only external
-dependency is `pgx/v5`, registered with `database/sql`. PostgreSQL is the system of record.
+### apps/web
 
-- **Layered architecture** with dependencies pointing inward:
-`handler` (HTTP) → `service` (business logic) → `store` (interfaces) → `store/postgres`,
-all built on `domain` (pure types, seat flattening, validation).
-- **Consistent envelope** — success: `{"data": …}`, failure: `{"error": {"code","message"}}`.
-- **Concurrency-safe** holds and bookings using `SELECT … FOR UPDATE`, so a seat can never be
-double-sold under load.
-- **Built for integration** — a stable resource model and a flat per-seat inventory endpoint
-let third parties consume the API without parsing the editor's scene graph.
-- **Auth scaffolded but off** — middleware + `AUTH_ENABLED` flag are wired in; OAuth/API-keys
-drop in later without touching handlers.
-
-Full endpoint reference and the partner integration lifecycle live in
-`[apps/api/README.md](apps/api/README.md)`.
-
-### `apps/web` — editor & renderer
-
-- **Editor** (`/editor/{layoutId}`) — visually design venues: rows (line/arc), seats, tables,
-standing sections, shapes, text, and images. Saves the scene to the API, which derives the
-flat seat list (row/column numbering, Excel-style labels, standing-section expansion).
-- **Renderer** (`/seat-layout/{layoutId}?ssId={showId}`) — the customer view: renders the
-layout joined with per-show seat availability and pricing for selection.
-- Talks to the API via `services/api.js`; configure the base URL with `NEXT_PUBLIC_API_BASE_URL`.
-
----
+The Next.js editor and renderer. The editor at `/editor/{layoutId}` lets you design venues visually: rows as lines or arcs, seats, tables, standing sections, shapes, text, and images. Saving sends the scene to the API, which derives the flat seat list. The renderer at `/seat-layout/{layoutId}?ssId={showId}` is the customer view, joining a layout with availability and pricing for each show. Point it at the API with `NEXT_PUBLIC_API_BASE_URL`.
 
 ## Domain model
 
+The flow runs venue, layout, save scene, show, hold, booking.
 
-| Concept         | Description                                                              |
-| --------------- | ------------------------------------------------------------------------ |
-| **Venue**       | Top-level container; owns categories.                                    |
-| **Category**    | A seat type / price tier (e.g. VIP, Standard).                           |
-| **Layout**      | The editable design (the "scene"), stored verbatim as JSONB.             |
-| **Seat**        | Flattened from a layout's scene on save — queryable inventory.           |
-| **Show**        | A performance/screening instance of a layout, with its own availability. |
-| **Seat status** | Per-show seat state: available / held / booked / blocked, plus price.    |
-| **Hold**        | A time-bounded reservation of seats prior to booking (TTL).              |
-| **Booking**     | A confirmed purchase; consumes a hold or books seats directly.           |
-
-
-**Integration lifecycle:** `venue → layout → save scene → show → hold → booking`.
-
----
+A **venue** is the top level container and owns its categories. A **category** is a seat type or price tier such as VIP or Standard. A **layout** is the editable design, the scene, stored as JSONB. **Seats** are flattened from a layout on save so they become queryable inventory. A **show** is one performance of a layout with its own availability, and **seat status** tracks every seat for that show as available, held, booked, or blocked, along with its price. A **hold** is a reservation with a TTL taken before purchase, and a **booking** is the confirmed sale.
 
 ## Make targets
 
-Run `make help` for the full list. Common ones:
-
-
-| Target                      | Description                                 |
-| --------------------------- | ------------------------------------------- |
-| `make db-up`                | Start local Postgres and wait until healthy |
-| `make db-down`              | Stop local Postgres                         |
-| `make migrate`              | Apply database migrations                   |
-| `make api-dev`              | Run the API server                          |
-| `make api-test`             | Run API unit tests                          |
-| `make api-test-integration` | Run API integration tests (needs `db-up`)   |
-| `make vet`                  | `go vet` the API                            |
-| `make web-install`          | Install web dependencies                    |
-| `make web-dev`              | Run the Next.js dev server                  |
-
-
----
-
-## Testing
-
-```bash
-make api-test                # Go unit tests
-make api-test-integration    # Go integration tests (concurrency, holds, bookings)
-cd apps/web && pnpm build    # web type-check + production build
-```
-
----
+Run `make help` for the full list. The everyday ones: `make db-up` and `make db-down` start and stop local Postgres, `make migrate` applies migrations, `make api-dev` runs the server, `make api-test` and `make api-test-integration` run the unit and integration suites (integration needs the database up), and `make web-install` followed by `make web-dev` brings up the Next.js app.
 
 ## Configuration
 
-The API reads its configuration from the environment (see `.env.example`):
-
-
-| Variable                   | Default                                                                      | Purpose                                      |
-| -------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| `PORT`                     | `8080`                                                                       | API listen port                              |
-| `DATABASE_URL`             | `postgres://seatlayout:seatlayout@localhost:5432/seatlayout?sslmode=disable` | Postgres DSN                                 |
-| `CORS_ORIGINS`             | `http://localhost:3000`                                                      | Comma-separated allowed origins              |
-| `AUTH_ENABLED`             | `false`                                                                      | Gate the (currently no-op) auth middleware   |
-| `RATE_LIMIT_RPS`           | `50`                                                                         | Per-IP token-bucket refill rate (0 disables) |
-| `RATE_LIMIT_BURST`         | `100`                                                                        | Per-IP burst size                            |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8080`                                                      | API base URL used by the web app             |
-
-
----
+The API reads from the environment; see `.env.example`. `PORT` sets the listen port (8080) and `DATABASE_URL` the Postgres DSN. `CORS_ORIGINS` lists the allowed origins. `AUTH_ENABLED` gates the auth middleware and stays false for now. `RATE_LIMIT_RPS` (50) and `RATE_LIMIT_BURST` (100) size the token bucket applied by IP, and a rate of 0 turns it off. The web app uses `NEXT_PUBLIC_API_BASE_URL` to reach the API.
 
 ## Conventions
 
-- Branch off `master`; don't commit directly to `master` unless asked.
-- Commit/push only when requested.
-
+Branch off master and don't commit there directly unless asked. Commit and push only when requested.
