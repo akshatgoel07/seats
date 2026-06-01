@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: seatlayout_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: seatlayout
+      POSTGRES_PASSWORD: seatlayout
+      POSTGRES_DB: seatlayout
+    ports:
+      - "5432:5432"
+    volumes:
+      - seatlayout_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seatlayout -d seatlayout"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  seatlayout_pgdata:

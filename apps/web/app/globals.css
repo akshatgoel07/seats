@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-primary-blue: #2346DD;
+}
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Smooth zoom transitions for SVG viewBox changes */
+@keyframes smooth-zoom-in {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes smooth-zoom-out {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Apply smooth transitions to SVG elements */
+svg {
+  transition: viewBox 0.3s ease-in-out;
+}
+
+/* Button hover animations */
+.zoom-button {
+  transition: all 0.2s ease-in-out;
+}
+
+.zoom-button:hover {
+  transform: scale(1.1);
+}
+
+.zoom-button:active {
+  transform: scale(0.95);
+}
+
+/* Tooltip animation */
+@keyframes tooltip-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-tooltip-fade-in {
+  animation: tooltip-fade-in 0.15s ease-out forwards;
+}
+
+/* Custom cursors */
+.cursor-custom-select {
+  cursor: url('data:image/svg+xml;utf8,<svg width="15" height="15" viewBox="0 0 295 326" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M24.959 2.62207C32.1712 1.03929 39.9169 2.49124 47.6221 6.85352C97.7728 35.2465 147.874 63.7342 197.999 92.165C222.918 106.299 247.834 120.431 272.798 134.477C279.299 138.134 285.893 142.348 289.396 150.111C297.64 168.386 286.841 188.111 266.782 191.848C234.103 197.935 201.424 203.994 168.763 210.149C160.544 211.698 154.369 215.987 149.937 223.351C132.839 251.755 115.519 280.028 98.2588 308.319C94.5614 314.38 89.9074 318.768 84.4268 321.274C78.9381 323.784 72.769 324.338 66.1719 322.974C59.7883 321.654 54.5555 318.686 50.6465 314.192C46.7507 309.714 44.2672 303.833 43.1689 296.824C38.3523 266.085 33.2737 235.112 28.4668 204.351C22.2915 164.833 16.2808 125.268 10.1475 85.7539C7.68845 69.9118 4.93348 53.96 2.57227 38.0488C1.50599 30.8639 1.54992 23.2914 6.08496 16.0576L6.11816 16.0029L6.15527 15.9521C11.3226 8.76659 17.7468 4.20494 24.959 2.62207Z" fill="black" stroke="white" stroke-width="12"/></svg>') 0 0, pointer;
+}
+
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
