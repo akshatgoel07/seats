@@ -378,6 +378,43 @@ const SeatLayout = () => {
     showSectionBoundaryInRenderer,
   ]);
 
+  // R11: memoize the rendered seat elements so unrelated re-renders (hover /
+  // tooltip fade / FPS tick) do NOT re-run the per-seat map over thousands of
+  // seats. It only rebuilds when the visible set, selection, legend filter, or a
+  // handler actually changes — NOT on hoveredSeat.
+  const seatElements = useMemo(() => {
+    if (!RENDER_SEATS) return null;
+    return visibleSeats.map(([seatId, seat]) => {
+      const selected = isSeatSelected(seatId);
+      return (
+        <SeatElement
+          key={seatId}
+          seat={seat}
+          seatId={seatId}
+          seatColor={getSeatColor(seat)}
+          darkColor={getDarkenedSeatColor(seat)}
+          isSelected={selected}
+          isDisabled={isSeatDisabled(seat)}
+          seatOpacity={
+            shouldApplyOpacityFilter(seat, selected, selectedLegendType) ? 0.3 : 1
+          }
+          onSeatClick={handleSeatClick}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        />
+      );
+    });
+  }, [
+    visibleSeats,
+    isSeatSelected,
+    getSeatColor,
+    getDarkenedSeatColor,
+    selectedLegendType,
+    handleSeatClick,
+    handleMouseEnter,
+    handleMouseLeave,
+  ]);
+
   // convert seat position (svg coords) -> screen coords
   const getScreenCoords = (seatPos) => {
     const svg = svgRef.current;
@@ -1257,32 +1294,9 @@ const SeatLayout = () => {
               },
             )}
 
-          {/* seats - only render visible seats for performance */}
-          {RENDER_SEATS &&
-            visibleSeats.map(([seatId, seat]) => {
-              // Resolve everything to primitives here so SeatElement (React.memo)
-              // only re-renders the seats whose values actually changed (R3).
-              const selected = isSeatSelected(seatId);
-              return (
-                <SeatElement
-                  key={seatId}
-                  seat={seat}
-                  seatId={seatId}
-                  seatColor={getSeatColor(seat)}
-                  darkColor={getDarkenedSeatColor(seat)}
-                  isSelected={selected}
-                  isDisabled={isSeatDisabled(seat)}
-                  seatOpacity={
-                    shouldApplyOpacityFilter(seat, selected, selectedLegendType)
-                      ? 0.3
-                      : 1
-                  }
-                  onSeatClick={handleSeatClick}
-                  onMouseEnter={handleMouseEnter}
-                  onMouseLeave={handleMouseLeave}
-                />
-              );
-            })}
+          {/* seats - only render visible seats; memoized (R11) so hover/tooltip
+              re-renders don't rebuild thousands of nodes */}
+          {seatElements}
 
           {/* seating sections - render after seats for proper z-ordering */}
           {RENDER_SEATING_SECTION_IMAGES &&
