@@ -1548,17 +1548,28 @@ export function editorReducer(state, action) {
       });
 
       // Create new seats with updated IDs and positions
-      // First, group seats by their new row IDs to update labels correctly
+      // First, group seats by their new row IDs to update labels correctly.
+      // Capture each seat's index within its row as we group, so the seat loop
+      // below doesn't do an O(rowSeats) indexOf per seat (R15).
       const seatsByNewRow = {};
+      const seatIndexInRowMap = new Map(); // originalSeat -> index within its new row
       state.clipboard.seats.forEach((originalSeat) => {
         const newRowId = rowIdMapping[originalSeat.rowId];
         if (newRowId) {
-          if (!seatsByNewRow[newRowId]) {
-            seatsByNewRow[newRowId] = [];
+          let arr = seatsByNewRow[newRowId];
+          if (!arr) {
+            arr = [];
+            seatsByNewRow[newRowId] = arr;
           }
-          seatsByNewRow[newRowId].push(originalSeat);
+          seatIndexInRowMap.set(originalSeat, arr.length);
+          arr.push(originalSeat);
         }
       });
+
+      // Precompute rowId -> index once (O(rows)) instead of rebuilding
+      // Object.keys(newRows) and indexOf-ing per pasted seat (O(seats*rows)).
+      const newRowIndexById = new Map();
+      Object.keys(newRows).forEach((rid, idx) => newRowIndexById.set(rid, idx));
 
       state.clipboard.seats.forEach((originalSeat) => {
         const newSeatId = generateId();
@@ -1567,13 +1578,12 @@ export function editorReducer(state, action) {
 
         if (newRowId) {
           // Seat belongs to a row - update label based on new row position
-          const allRowIds = Object.keys(newRows);
-          const newRowIndex = allRowIds.indexOf(newRowId);
+          const newRowIndex = newRowIndexById.has(newRowId)
+            ? newRowIndexById.get(newRowId)
+            : -1;
 
-          // Find the seat's position within its row
-          const rowSeats = seatsByNewRow[newRowId];
-          const seatIndexInRow = rowSeats.indexOf(originalSeat);
-          const seatNumber = seatIndexInRow + 1;
+          // Position within its row (captured during grouping above).
+          const seatNumber = (seatIndexInRowMap.get(originalSeat) ?? 0) + 1;
 
           // Generate new label based on new row position
           const newLabel =

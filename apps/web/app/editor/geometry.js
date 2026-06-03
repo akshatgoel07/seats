@@ -50,6 +50,20 @@ export function generateSeatsForRow(
 
   const rowLength = getRowLength(geometry);
 
+  // For curved rows, integrate the arc length ONCE into a lookup table instead
+  // of re-integrating per seat (R15). seatSpacing/angles below read from it.
+  let arcLUT = null;
+  let arcSeatSpacing = 0;
+  if (geometry.kind === GEOMETRY_TYPES.ARC && seatCount > 1) {
+    arcLUT = buildEllipticalArcLUT(
+      geometry.radiusX,
+      geometry.radiusY,
+      geometry.startAngle,
+      geometry.endAngle,
+    );
+    arcSeatSpacing = arcLUT.totalLength / (seatCount - 1);
+  }
+
   // Calculate seat positions
   for (let i = 0; i < seatCount; i++) {
     let t, localX, localY;
@@ -75,24 +89,8 @@ export function generateSeatsForRow(
         localX = center.x + radiusX * Math.cos(midAngle);
         localY = center.y + radiusY * Math.sin(midAngle);
       } else {
-        // Calculate total arc length and distribute seats equidistantly
-        const totalArcLength = calculateEllipticalArcLength(
-          radiusX,
-          radiusY,
-          startAngle,
-          endAngle,
-        );
-        const seatSpacing = totalArcLength / (seatCount - 1);
-        const targetLength = i * seatSpacing;
-
-        // Find the angle corresponding to this arc length
-        const angle = findAngleForArcLength(
-          radiusX,
-          radiusY,
-          startAngle,
-          endAngle,
-          targetLength,
-        );
+        // Distribute seats equidistantly along the arc using the prebuilt LUT.
+        const angle = angleAtArcLength(arcLUT, i * arcSeatSpacing);
 
         localX = center.x + radiusX * Math.cos(angle);
         localY = center.y + radiusY * Math.sin(angle);
@@ -267,6 +265,85 @@ export function findAngleForArcLength(
   }
 
   return endAngle;
+}
+
+/**
+ * Build a cumulative arc-length lookup table for an elliptical arc (R15).
+ *
+ * generateSeatsForRow previously called findAngleForArcLength once per seat, and
+ * that function re-integrated the whole arc each call (and called
+ * calculateEllipticalArcLength, another full integration) — so an N-seat curved
+ * row did ~N x 300 trig iterations. This integrates the arc ONCE into a
+ * cumulative table; angleAtArcLength then binary-searches it in O(log segments)
+ * per seat, giving O(segments + N) total with identical numerical results.
+ *
+ * @returns {{ startAngle:number, endAngle:number, segmentAngle:number, numSegments:number, totalLength:number, cumulative:number[] }}
+ */
+export function buildEllipticalArcLUT(
+  radiusX,
+  radiusY,
+  startAngle,
+  endAngle,
+  numSegments = 100,
+) {
+  const angleSpan = endAngle - startAngle;
+  const segmentAngle = angleSpan / numSegments;
+  const cumulative = new Array(numSegments + 1);
+  cumulative[0] = 0;
+  let totalLength = 0;
+
+  for (let i = 0; i < numSegments; i++) {
+    const angle1 = startAngle + i * segmentAngle;
+    const angle2 = startAngle + (i + 1) * segmentAngle;
+
+    const dx1 = -radiusX * Math.sin(angle1);
+    const dy1 = radiusY * Math.cos(angle1);
+    const dx2 = -radiusX * Math.sin(angle2);
+    const dy2 = radiusY * Math.cos(angle2);
+
+    // Identical trapezoidal segment-length formula to calculateEllipticalArcLength.
+    const segmentLength =
+      Math.sqrt(
+        (((dx1 + dx2) / 2) * (dx1 + dx2)) / 2 +
+          (((dy1 + dy2) / 2) * (dy1 + dy2)) / 2,
+      ) * segmentAngle;
+    totalLength += segmentLength;
+    cumulative[i + 1] = totalLength;
+  }
+
+  return {
+    startAngle,
+    endAngle,
+    segmentAngle,
+    numSegments,
+    totalLength,
+    cumulative,
+  };
+}
+
+/**
+ * Find the angle at a target arc length using a prebuilt LUT. Numerically
+ * equivalent to findAngleForArcLength (same segments, same linear interpolation
+ * within the containing segment) but O(log segments) instead of O(segments).
+ */
+export function angleAtArcLength(lut, targetLength) {
+  const { startAngle, endAngle, segmentAngle, numSegments, totalLength, cumulative } =
+    lut;
+  if (targetLength <= 0) return startAngle;
+  if (targetLength >= totalLength) return endAngle;
+
+  // Largest i with cumulative[i] <= targetLength (the segment that contains it).
+  let lo = 0;
+  let hi = numSegments;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (cumulative[mid] <= targetLength) lo = mid;
+    else hi = mid - 1;
+  }
+  const segLen = cumulative[lo + 1] - cumulative[lo];
+  const remaining = targetLength - cumulative[lo];
+  const ratio = segLen > 0 ? remaining / segLen : 0;
+  return startAngle + lo * segmentAngle + ratio * segmentAngle;
 }
 
 /**
