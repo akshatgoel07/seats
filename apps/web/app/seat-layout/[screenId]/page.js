@@ -39,6 +39,7 @@ import {
   SHOW_TOOLTIP,
   getViewportPadding,
   isSeatDisabled,
+  shouldApplyOpacityFilter,
 } from "../utils/index";
 
 const SeatLayout = () => {
@@ -1238,20 +1239,30 @@ const SeatLayout = () => {
 
           {/* seats - only render visible seats for performance */}
           {RENDER_SEATS &&
-            visibleSeats.map(([seatId, seat]) => (
-              <SeatElement
-                key={seatId}
-                seat={seat}
-                seatId={seatId}
-                isSelected={isSeatSelected}
-                selectedLegendType={selectedLegendType}
-                getSeatColor={getSeatColor}
-                getDarkenedSeatColor={getDarkenedSeatColor}
-                onSeatClick={handleSeatClick}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-              />
-            ))}
+            visibleSeats.map(([seatId, seat]) => {
+              // Resolve everything to primitives here so SeatElement (React.memo)
+              // only re-renders the seats whose values actually changed (R3).
+              const selected = isSeatSelected(seatId);
+              return (
+                <SeatElement
+                  key={seatId}
+                  seat={seat}
+                  seatId={seatId}
+                  seatColor={getSeatColor(seat)}
+                  darkColor={getDarkenedSeatColor(seat)}
+                  isSelected={selected}
+                  isDisabled={isSeatDisabled(seat)}
+                  seatOpacity={
+                    shouldApplyOpacityFilter(seat, selected, selectedLegendType)
+                      ? 0.3
+                      : 1
+                  }
+                  onSeatClick={handleSeatClick}
+                  onMouseEnter={handleMouseEnter}
+                  onMouseLeave={handleMouseLeave}
+                />
+              );
+            })}
 
           {/* seating sections - render after seats for proper z-ordering */}
           {RENDER_SEATING_SECTION_IMAGES &&

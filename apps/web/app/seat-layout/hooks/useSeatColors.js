@@ -3,85 +3,39 @@
  * Handles:
  * - Seat color calculation based on status, type, and selection
  * - Darkened color variants for borders/shadows
- * - Memoization for performance
+ *
+ * R10: previously this rebuilt a full Map<seatId,color> (and a darkened Map)
+ * on every selection change — O(seats) work + new Map identities that defeated
+ * SeatElement's memo. Selection touches one seat, so instead the getters resolve
+ * a single seat in O(1): the base color comes from the pure getSeatColor and the
+ * selection is a cheap Set lookup. darkenColor is module-cached (R6), so the
+ * darkened getter is O(1) too. Callers pass the resolved colors to SeatElement
+ * as primitive props (R3) so only toggled seats re-render.
  */
 
-import { useMemo, useCallback } from "react";
-import {
-  darkenColor,
-  COLOR_UNAVAILABLE,
-  COLOR_BLOCKED,
-  COLOR_SELECTED,
-  COLOR_DEFAULT,
-  BLOCKED_RESERVE_TYPES,
-} from "../utils/index";
+import { useCallback } from "react";
+import { darkenColor, getSeatColor as resolveSeatColor } from "../utils/index";
 
 /**
  * Custom hook for managing seat colors
- * @param {Object} seatMap - Map of seat IDs to seat data
+ * @param {Object} seatMap - Map of seat IDs to seat data (unused now, kept for API stability)
  * @param {Set} selectedSeats - Set of selected seat IDs
  * @param {Map} seatTypesMap - Map of seat type IDs to colors
- * @returns {Object} Color maps and getter functions
+ * @returns {{ getSeatColor: (seat: any) => string, getDarkenedSeatColor: (seat: any) => string }}
  */
 export function useSeatColors(seatMap, selectedSeats, seatTypesMap) {
-  /**
-   * Build seat colors map
-   */
-  const seatColorsMap = useMemo(() => {
-    const colorsMap = new Map();
-    Object.values(seatMap).forEach((seat) => {
-      const isSelected = selectedSeats.has(seat.sl_id);
-      const isBlockedByReserveType = BLOCKED_RESERVE_TYPES.includes(
-        seat.seat_reserve_type_id
-      );
-      const isDisabled =
-        seat.sl_seat_status !== "0" || seat.covidBlocked || seat.isVipReserved;
-
-      let color;
-      if (isDisabled) color = COLOR_UNAVAILABLE;
-      else if (isBlockedByReserveType) color = COLOR_BLOCKED;
-      else if (isSelected) color = COLOR_SELECTED;
-      else color = seatTypesMap.get(seat.sst_seat_type) || COLOR_DEFAULT;
-
-      colorsMap.set(seat.sl_id, color);
-    });
-    return colorsMap;
-  }, [seatMap, selectedSeats, seatTypesMap]);
-
-  /**
-   * Build darkened colors map for borders/shadows
-   */
-  const darkenColorsMap = useMemo(() => {
-    const darkMap = new Map();
-    seatColorsMap.forEach((color, seatId) => {
-      darkMap.set(seatId, darkenColor(color, 0.4));
-    });
-    return darkMap;
-  }, [seatColorsMap]);
-
-  /**
-   * Get seat color by seat ID
-   */
   const getSeatColor = useCallback(
-    (seat) => {
-      return seatColorsMap.get(seat.sl_id) || COLOR_DEFAULT;
-    },
-    [seatColorsMap]
+    (seat) =>
+      resolveSeatColor(seat, selectedSeats.has(seat.sl_id), seatTypesMap),
+    [selectedSeats, seatTypesMap],
   );
 
-  /**
-   * Get darkened seat color by seat ID
-   */
   const getDarkenedSeatColor = useCallback(
-    (seat) => {
-      return darkenColorsMap.get(seat.sl_id) || darkenColor(COLOR_DEFAULT, 0.4);
-    },
-    [darkenColorsMap]
+    (seat) => darkenColor(getSeatColor(seat), 0.4),
+    [getSeatColor],
   );
 
   return {
-    seatColorsMap,
-    darkenColorsMap,
     getSeatColor,
     getDarkenedSeatColor,
   };

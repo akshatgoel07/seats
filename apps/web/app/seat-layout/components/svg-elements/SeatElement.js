@@ -1,20 +1,29 @@
 /**
  * SeatElement component
- * Renders an individual seat in the SVG layout
+ * Renders an individual seat in the SVG layout.
+ *
+ * R3: receives fully-resolved PRIMITIVE props (seatColor, darkColor, isSelected,
+ * isDisabled, seatOpacity) instead of function props (getSeatColor/isSelected/...)
+ * that changed identity on every selection. With primitives, React.memo's shallow
+ * compare holds, so selecting one seat re-renders only the toggled seats rather
+ * than every visible seat.
+ *
+ * R16: dropped the blanket `transition-all` class (it animated every property —
+ * fill/stroke/opacity/filter — forcing paint on hover/select across all seats).
  */
 
 import React, { useCallback } from "react";
-import { isSeatDisabled, shouldApplyOpacityFilter } from "../../utils/index";
 
 export const SeatElement = React.memo(function SeatElement(
   /**
    * @type {{
    *   seat: any,
    *   seatId: any,
-   *   isSelected: any,
-   *   selectedLegendType: any,
-   *   getSeatColor: (seat: any) => any,
-   *   getDarkenedSeatColor: (seat: any) => any,
+   *   seatColor: string,
+   *   darkColor: string,
+   *   isSelected: boolean,
+   *   isDisabled: boolean,
+   *   seatOpacity: number,
    *   onSeatClick: (seatId: any, seat: any) => void,
    *   onMouseEnter: (seat: any) => void,
    *   onMouseLeave: (value: any) => void,
@@ -23,27 +32,17 @@ export const SeatElement = React.memo(function SeatElement(
   {
     seat,
     seatId,
+    seatColor,
+    darkColor,
     isSelected,
-    selectedLegendType,
-    getSeatColor,
-    getDarkenedSeatColor,
+    isDisabled,
+    seatOpacity,
     onSeatClick,
     onMouseEnter,
     onMouseLeave,
   },
 ) {
   const { position, dimensions } = seat;
-  const seatColor = getSeatColor(seat);
-  const darkColor = getDarkenedSeatColor(seat);
-  const isDisabled = isSeatDisabled(seat);
-
-  // Apply opacity filter based on selected legend type
-  const shouldApplyOpacity = shouldApplyOpacityFilter(
-    seat,
-    isSelected(seatId),
-    selectedLegendType,
-  );
-  const seatOpacity = shouldApplyOpacity ? 0.3 : 1;
 
   // Apply size factor to create visual spacing between seats
   // Using 88% of original size creates visible gaps while keeping seats clearly visible
@@ -52,21 +51,27 @@ export const SeatElement = React.memo(function SeatElement(
   const seatHeight = (dimensions?.height || 20) * sizeFactor;
   const seatRadius = Math.min(seatWidth / 2, seatHeight / 2);
 
-  const handleTouchStart = useCallback((e) => {
-    if (!isDisabled) {
-      e.stopPropagation();
-    }
-  }, [isDisabled]);
+  const handleTouchStart = useCallback(
+    (e) => {
+      if (!isDisabled) {
+        e.stopPropagation();
+      }
+    },
+    [isDisabled],
+  );
 
-  const handleTouchEnd = useCallback((e) => {
-    if (!isDisabled) {
-      e.stopPropagation();
-      e.preventDefault();
-      onSeatClick(seatId, seat);
-    }
-  }, [isDisabled, onSeatClick, seatId, seat]);
+  const handleTouchEnd = useCallback(
+    (e) => {
+      if (!isDisabled) {
+        e.stopPropagation();
+        e.preventDefault();
+        onSeatClick(seatId, seat);
+      }
+    },
+    [isDisabled, onSeatClick, seatId, seat],
+  );
 
-  const handleClick = useCallback((e) => {
+  const handleClick = useCallback(() => {
     if (!isDisabled) {
       onSeatClick(seatId, seat);
     }
@@ -85,6 +90,7 @@ export const SeatElement = React.memo(function SeatElement(
       transform={`translate(${position.x}, ${position.y}) rotate(${position.rotation})`}
       className={`cursor-pointer ${isDisabled ? "cursor-not-allowed" : ""}`}
       data-seat-element="true"
+      data-seat-id={seatId}
       onClick={handleClick}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
@@ -103,7 +109,7 @@ export const SeatElement = React.memo(function SeatElement(
         stroke={darkColor}
         strokeWidth="0.5"
         opacity={seatOpacity}
-        className={`transition-all ${isSelected(seatId) ? "drop-shadow-lg" : ""}`}
+        className={isSelected ? "drop-shadow-lg" : ""}
         pointerEvents="auto"
       />
     </g>
