@@ -120,6 +120,28 @@ export function buildSeatMap(canvasSceneData, seatStatusMap) {
   const seats = canvasSceneData.seats || {};
   const sections = canvasSceneData.sections || {};
 
+  // Precompute each row's seat centroid ONCE (O(n)). Previously every seat in a
+  // rotated row recomputed it via Object.values(seats).filter(...) — O(n^2) at
+  // load for a layout with rotated rows.
+  const rowCentroids = new Map();
+  {
+    const sums = new Map();
+    Object.values(seats).forEach((s) => {
+      if (!s.rowId) return;
+      let acc = sums.get(s.rowId);
+      if (!acc) {
+        acc = { x: 0, y: 0, n: 0 };
+        sums.set(s.rowId, acc);
+      }
+      acc.x += s.localX || 0;
+      acc.y += s.localY || 0;
+      acc.n += 1;
+    });
+    sums.forEach((acc, rowId) => {
+      rowCentroids.set(rowId, { x: acc.x / acc.n, y: acc.y / acc.n });
+    });
+  }
+
   Object.entries(seats).forEach(([seatId, seatData]) => {
     const apiData = seatStatusMap[seatId];
     
@@ -131,13 +153,11 @@ export function buildSeatMap(canvasSceneData, seatStatusMap) {
       const row = rows[seatData.rowId];
       
       if (row.transform && row.transform.rotation) {
-        const rowSeats = Object.values(seats).filter((s) => s.rowId === row.id);
-        
-        if (rowSeats.length > 0) {
-          const centerX =
-            rowSeats.reduce((sum, s) => sum + (s.localX || 0), 0) / rowSeats.length;
-          const centerY =
-            rowSeats.reduce((sum, s) => sum + (s.localY || 0), 0) / rowSeats.length;
+        const centroid = rowCentroids.get(seatData.rowId);
+
+        if (centroid) {
+          const centerX = centroid.x;
+          const centerY = centroid.y;
 
           const cos = Math.cos(row.transform.rotation);
           const sin = Math.sin(row.transform.rotation);
