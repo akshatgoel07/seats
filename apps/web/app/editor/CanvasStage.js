@@ -1734,16 +1734,23 @@ export default function CanvasStage() {
     const displayWidth = rect.width;
     const displayHeight = rect.height;
 
-    // Set the actual canvas size in memory (scaled for high-DPI displays)
-    canvas.width = displayWidth * dpr;
-    canvas.height = displayHeight * dpr;
+    // Only reassign the backing store when the size actually changed. Writing
+    // canvas.width/height forces a full backing-store reallocation + clear, so
+    // doing it unconditionally on every redraw (e.g. a selection change at the
+    // same size) is wasteful. setTransform below sets the DPR scale absolutely
+    // (unlike ctx.scale, which would compound when the size is unchanged).
+    const backingWidth = Math.round(displayWidth * dpr);
+    const backingHeight = Math.round(displayHeight * dpr);
+    if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+      canvas.width = backingWidth;
+      canvas.height = backingHeight;
+      canvas.style.width = displayWidth + "px";
+      canvas.style.height = displayHeight + "px";
+    }
 
-    // Scale the canvas style back down to the desired CSS size
-    canvas.style.width = displayWidth + "px";
-    canvas.style.height = displayHeight + "px";
-
-    // Scale the drawing context so everything we draw will be scaled
-    ctx.scale(dpr, dpr);
+    // Scale the drawing context so everything we draw will be scaled (absolute
+    // transform — safe to call every redraw without compounding).
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     // Clear the entire canvas
     ctx.clearRect(0, 0, displayWidth, displayHeight);
@@ -1790,6 +1797,31 @@ export default function CanvasStage() {
     renderSnapIndicators,
     renderToolPreview,
   ]);
+
+  // On-demand canvas rendering (R1).
+  //
+  // Previously an unconditional ~60fps requestAnimationFrame loop redrew the
+  // ENTIRE scene every frame even when nothing changed, pinning a CPU core and
+  // competing with React for the main thread during every interaction. The
+  // canvas output is a pure function of React state (no clock-driven canvas
+  // animation), so instead we mark the canvas "dirty" and coalesce at most one
+  // redraw per frame. render() runs only when something it depends on changed.
+  const renderDirtyRef = useRef(true);
+  const renderRef = useRef(render);
+  useEffect(() => {
+    renderRef.current = render;
+  }, [render]);
+
+  const requestRender = useCallback(() => {
+    renderDirtyRef.current = true;
+    if (animationFrameRef.current != null) return; // a frame is already queued
+    animationFrameRef.current = requestAnimationFrame(() => {
+      animationFrameRef.current = null;
+      if (!renderDirtyRef.current) return;
+      renderDirtyRef.current = false;
+      renderRef.current();
+    });
+  }, []);
 
   // Hit testing for elements
   const hitTestElement = useCallback(
@@ -3654,16 +3686,11 @@ export default function CanvasStage() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    // Create ResizeObserver to detect container size changes
-    const resizeObserver = new ResizeObserver((entries) => {
-      // Trigger a re-render when the canvas container size changes
-      // The render function uses getBoundingClientRect() to get the new size
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      animationFrameRef.current = requestAnimationFrame(() => {
-        render();
-      });
+    // Create ResizeObserver to detect container size changes. A resize doesn't
+    // change React state (so it won't trigger the render-on-change effect
+    // below), so request an explicit redraw at the new size.
+    const resizeObserver = new ResizeObserver(() => {
+      requestRender();
     });
 
     // Observe the canvas element
@@ -3671,12 +3698,7 @@ export default function CanvasStage() {
 
     // Also listen for window resize
     const handleWindowResize = () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      animationFrameRef.current = requestAnimationFrame(() => {
-        render();
-      });
+      requestRender();
     };
     window.addEventListener("resize", handleWindowResize);
 
@@ -3684,23 +3706,25 @@ export default function CanvasStage() {
       resizeObserver.disconnect();
       window.removeEventListener("resize", handleWindowResize);
     };
-  }, [render]);
+  }, [requestRender]);
 
-  // Animation loop
+  // Redraw whenever render() (i.e. any scene/selection/view/interaction state it
+  // depends on) changes identity. requestRender coalesces to one frame, so rapid
+  // state changes don't stack redraws.
   useEffect(() => {
-    const animate = () => {
-      render();
-      animationFrameRef.current = requestAnimationFrame(animate);
-    };
+    requestRender();
+  }, [render, requestRender]);
 
-    animationFrameRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      if (animationFrameRef.current) {
+  // Cancel any pending frame on unmount.
+  useEffect(
+    () => () => {
+      if (animationFrameRef.current != null) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
-    };
-  }, [render]);
+    },
+    [],
+  );
 
   // Determine cursor style based on current state
   const getCursor = () => {
