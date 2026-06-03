@@ -1928,9 +1928,17 @@ export default function CanvasStage() {
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
-      // Update mouse position for tool previews (world coordinates)
+      // Update mouse position for tool previews (world coordinates). R7: only the
+      // drawing/measure tools render a cursor preview, so skip this state update
+      // (and the re-render + redraw it triggers) on every mousemove for the
+      // select/pan tools — that was a re-render on literally every cursor move.
       const worldPos = screenToWorld(x, y);
-      setMousePosition(worldPos);
+      if (
+        state.currentTool !== "select" &&
+        state.currentTool !== "pan"
+      ) {
+        setMousePosition(worldPos);
+      }
 
       if (isMeasuring && measurementStart) {
         const snappedPoint = findSnapPoint(worldPos.x, worldPos.y);
