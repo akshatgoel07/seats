@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useMemo, useRef } from "react";
 import { generateId, createSection } from "./types.js";
 import { generateSeatsForRow } from "./geometry.js";
 
@@ -46,31 +46,42 @@ export const ACTIONS = {
 };
 
 export function useActionCreators(dispatch, state) {
-  return {
-    setTool: useCallback((tool) => {
+  // Keep a ref to the latest committed state so the few action creators that
+  // need to read current state can stay referentially stable instead of being
+  // rebuilt every render.
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // `dispatch` from useReducer is referentially stable, so this object is built
+  // once and keeps a stable identity across renders. That stable identity is the
+  // firewall that lets memoized consumers (Toolbar/PropertiesPanel/CanvasStage)
+  // actually skip re-rendering when only unrelated state changes (R2).
+  return useMemo(() => {
+    return {
+    setTool: (tool) => {
       dispatch({ type: ACTIONS.SET_TOOL, payload: tool });
-    }, []),
+    },
 
-    setSelection: useCallback((ids) => {
+    setSelection: (ids) => {
       dispatch({ type: ACTIONS.SET_SELECTION, payload: ids });
-    }, []),
+    },
 
-    addToSelection: useCallback((id) => {
+    addToSelection: (id) => {
       dispatch({ type: ACTIONS.ADD_TO_SELECTION, payload: id });
-    }, []),
+    },
 
-    clearSelection: useCallback(() => {
+    clearSelection: () => {
       dispatch({ type: ACTIONS.CLEAR_SELECTION });
-    }, []),
+    },
 
-    updateView: useCallback((viewUpdates) => {
+    updateView: (viewUpdates) => {
       dispatch({ type: ACTIONS.UPDATE_VIEW, payload: viewUpdates });
-    }, []),
+    },
 
     // Zoom to fit all content in the viewport
-    zoomToFit: useCallback((canvasWidth, canvasHeight, padding = 50) => {
-      const { seats, rows, elements } = state.scene;
-      
+    zoomToFit: (canvasWidth, canvasHeight, padding = 50) => {
+      const { seats, rows, elements } = stateRef.current.scene;
+
       // Calculate bounding box of all content
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       let hasContent = false;
@@ -157,55 +168,55 @@ export function useActionCreators(dispatch, state) {
         type: ACTIONS.UPDATE_VIEW, 
         payload: { scale, tx, ty } 
       });
-    }, [state.scene.seats, state.scene.rows, state.scene.elements]),
+    },
 
-    addRow: useCallback((row) => {
+    addRow: (row) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_ROW, payload: row });
-    }, []),
+    },
 
-    addSeat: useCallback((seat) => {
+    addSeat: (seat) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_SEAT, payload: seat });
-    }, []),
+    },
 
-    updateRow: useCallback((id, updates, saveHistory = true) => {
+    updateRow: (id, updates, saveHistory = true) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
       dispatch({ type: ACTIONS.UPDATE_ROW, payload: { id, updates } });
-    }, []),
+    },
 
-    deleteItems: useCallback((ids) => {
+    deleteItems: (ids) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.DELETE_ITEMS, payload: ids });
-    }, []),
+    },
 
-    toggleGrid: useCallback(() => {
+    toggleGrid: () => {
       dispatch({ type: ACTIONS.TOGGLE_GRID });
-    }, []),
+    },
 
-    undo: useCallback(() => {
+    undo: () => {
       dispatch({ type: ACTIONS.UNDO });
-    }, []),
+    },
 
-    redo: useCallback(() => {
+    redo: () => {
       dispatch({ type: ACTIONS.REDO });
-    }, []),
+    },
 
-    loadScene: useCallback((scene) => {
+    loadScene: (scene) => {
       dispatch({ type: ACTIONS.LOAD_SCENE, payload: scene });
-    }, []),
+    },
 
-    moveSeats: useCallback((seatIds, deltaX, deltaY) => {
+    moveSeats: (seatIds, deltaX, deltaY) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.MOVE_SEATS,
         payload: { seatIds, deltaX, deltaY },
       });
-    }, []),
+    },
 
-    updateSeat: useCallback((seatId, updates, saveHistory = true) => {
+    updateSeat: (seatId, updates, saveHistory = true) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
@@ -213,9 +224,9 @@ export function useActionCreators(dispatch, state) {
         type: ACTIONS.UPDATE_SEAT,
         payload: { seatId, updates },
       });
-    }, []),
+    },
 
-    updateSeats: useCallback((seatIds, updates, saveHistory = true) => {
+    updateSeats: (seatIds, updates, saveHistory = true) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
@@ -223,25 +234,25 @@ export function useActionCreators(dispatch, state) {
         type: ACTIONS.UPDATE_SEATS,
         payload: { seatIds, updates },
       });
-    }, []),
+    },
 
-    ensureSectionExists: useCallback(() => {
+    ensureSectionExists: () => {
       // Check if any sections exist, create one if not
-      const sections = Object.keys(state.scene.sections);
+      const sections = Object.keys(stateRef.current.scene.sections);
       if (sections.length === 0) {
         const defaultCategoryId =
-          state.scene.venue.categories[0]?.id || "default";
+          stateRef.current.scene.venue.categories[0]?.id || "default";
         const defaultSection = createSection("w", defaultCategoryId);
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
         dispatch({
           type: ACTIONS.LOAD_SCENE,
           payload: {
-            ...state.scene,
+            ...stateRef.current.scene,
             sections: {
               [defaultSection.id]: defaultSection,
             },
             venue: {
-              ...state.scene.venue,
+              ...stateRef.current.scene.venue,
               sections: [defaultSection.id],
             },
           },
@@ -249,107 +260,104 @@ export function useActionCreators(dispatch, state) {
         return defaultSection.id;
       }
       return sections[0];
-    }, [state.scene]),
+    },
 
-    copyRows: useCallback(() => {
-      if (state.selectedIds.length === 0) return;
+    copyRows: () => {
+      if (stateRef.current.selectedIds.length === 0) return;
       dispatch({ type: ACTIONS.COPY_ROWS });
-    }, [state.selectedIds]),
+    },
 
-    pasteRows: useCallback(
-      (offset) => {
-        if (state.clipboard.isEmpty) return;
-        dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
-        dispatch({ type: ACTIONS.PASTE_ROWS, payload: { offset } });
-      },
-      [state.clipboard],
-    ),
+    pasteRows: (offset) => {
+      if (stateRef.current.clipboard.isEmpty) return;
+      dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
+      dispatch({ type: ACTIONS.PASTE_ROWS, payload: { offset } });
+    },
 
-    adjustSeatSpacing: useCallback((seatIds, spacingDelta) => {
+    adjustSeatSpacing: (seatIds, spacingDelta) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.ADJUST_SEAT_SPACING,
         payload: { seatIds, spacingDelta },
       });
-    }, []),
+    },
 
-    rotateSelectedSeats: useCallback((angle) => {
+    rotateSelectedSeats: (angle) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.ROTATE_SELECTED_SEATS,
         payload: { angle },
       });
-    }, []),
+    },
 
-    addElement: useCallback((element) => {
+    addElement: (element) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_ELEMENT, payload: element });
-    }, []),
+    },
 
-    updateElement: useCallback((id, updates, saveHistory = true) => {
+    updateElement: (id, updates, saveHistory = true) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
       dispatch({ type: ACTIONS.UPDATE_ELEMENT, payload: { id, updates } });
-    }, []),
+    },
 
-    moveElements: useCallback((elementIds, deltaX, deltaY) => {
+    moveElements: (elementIds, deltaX, deltaY) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.MOVE_ELEMENTS,
         payload: { elementIds, deltaX, deltaY },
       });
-    }, []),
+    },
 
-    addImage: useCallback((image) => {
+    addImage: (image) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_IMAGE, payload: image });
-    }, []),
+    },
 
-    updateImage: useCallback((id, updates) => {
+    updateImage: (id, updates) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UPDATE_IMAGE, payload: { id, updates } });
-    }, []),
+    },
 
-    lockImage: useCallback((id) => {
+    lockImage: (id) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.LOCK_IMAGE, payload: { id } });
-    }, []),
+    },
 
-    unlockImage: useCallback((id) => {
+    unlockImage: (id) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UNLOCK_IMAGE, payload: { id } });
-    }, []),
+    },
 
-    completePath: useCallback(() => {
+    completePath: () => {
       dispatch({ type: ACTIONS.COMPLETE_PATH });
-    }, []),
+    },
 
-    updateGlobalSettings: useCallback((settings) => {
+    updateGlobalSettings: (settings) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UPDATE_GLOBAL_SETTINGS, payload: settings });
-    }, []),
+    },
 
-    updateToolSettings: useCallback((toolType, settings) => {
+    updateToolSettings: (toolType, settings) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.UPDATE_TOOL_SETTINGS,
         payload: { toolType, settings },
       });
-    }, []),
+    },
 
-    assignTableLabels: useCallback(() => {
+    assignTableLabels: () => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ASSIGN_TABLE_LABELS });
-    }, []),
+    },
 
-    groupElements: useCallback(() => {
+    groupElements: () => {
       // Filter to only include actual elements (not seats or rows)
-      const elementIds = state.selectedIds.filter(
+      const elementIds = stateRef.current.selectedIds.filter(
         (id) =>
-          state.scene.elements[id] &&
-          !state.scene.seats[id] &&
-          !state.scene.rows[id],
+          stateRef.current.scene.elements[id] &&
+          !stateRef.current.scene.seats[id] &&
+          !stateRef.current.scene.rows[id],
       );
 
       if (elementIds.length < 2) return; // Need at least 2 elements to group
@@ -359,29 +367,30 @@ export function useActionCreators(dispatch, state) {
         type: ACTIONS.GROUP_ELEMENTS,
         payload: { elementIds },
       });
-    }, [state.selectedIds, state.scene]),
+    },
 
-    ungroupElements: useCallback((groupId) => {
+    ungroupElements: (groupId) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UNGROUP_ELEMENTS, payload: { groupId } });
-    }, []),
+    },
 
-    commitToHistory: useCallback(() => {
+    commitToHistory: () => {
       dispatch({ type: ACTIONS.COMMIT_TO_HISTORY });
-    }, []),
+    },
 
-    cancelDrawing: useCallback(() => {
+    cancelDrawing: () => {
       dispatch({ type: ACTIONS.CANCEL_DRAWING });
-    }, []),
+    },
 
-    addTableWithSeats: useCallback((table, seats) => {
+    addTableWithSeats: (table, seats) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_TABLE_WITH_SEATS, payload: { table, seats } });
-    }, []),
+    },
 
-    updateTableGroup: useCallback((table, oldSeats, config) => {
+    updateTableGroup: (table, oldSeats, config) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UPDATE_TABLE_GROUP, payload: { table, oldSeats, config } });
-    }, []),
-  };
+    },
+    };
+  }, [dispatch]);
 }

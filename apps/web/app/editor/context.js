@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useReducer, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  useMemo,
+} from "react";
 import { createDefaultEditorState } from "./types.js";
 import { editorReducer } from "./reducer.js";
 import { useActionCreators } from "./actions.js";
@@ -36,10 +42,14 @@ export function EditorProvider({ children }) {
     };
   }, [state, actions]);
 
+  // `actions` is now referentially stable (see useActionCreators), so the
+  // context value only changes identity when `state` changes — not on every
+  // render — and the stable `actions` reference flows to consumers so their
+  // action-dependent memoized callbacks/effects stop tearing down each render.
+  const value = useMemo(() => ({ state, actions }), [state, actions]);
+
   return (
-    <EditorContext.Provider value={{ state, actions }}>
-      {children}
-    </EditorContext.Provider>
+    <EditorContext.Provider value={value}>{children}</EditorContext.Provider>
   );
 }
 
