@@ -1,6 +1,16 @@
 import { useMemo } from "react";
 import { generateSeatsForRow } from "../geometry.js";
 import { createLineGeometry, createArcGeometry } from "../types.js";
+import { buildSeatsByRow, makeRowCentroidGetter } from "./seatIndex.js";
+
+/**
+ * Module-level memo cache for darkenColor. renderSeats calls darkenColor once
+ * per non-selected seat every frame, but a layout only uses a handful of
+ * distinct (color, factor) pairs, so caching turns thousands of hex parses +
+ * string allocations per frame into a single Map lookup.
+ * @type {Map<string, string>}
+ */
+const darkenColorCache = new Map();
 
 /**
  * Convert hex color to darker version by reducing RGB values
@@ -9,6 +19,10 @@ import { createLineGeometry, createArcGeometry } from "../types.js";
  * @returns {string} Darker hex color
  */
 function darkenColor(hexColor, factor = 0.3) {
+  const cacheKey = `${hexColor}|${factor}`;
+  const cached = darkenColorCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   // Remove # if present
   const hex = hexColor.replace("#", "");
 
@@ -23,9 +37,11 @@ function darkenColor(hexColor, factor = 0.3) {
   const darkB = Math.max(0, Math.floor(b * (1 - factor)));
 
   // Convert back to hex
-  return `#${darkR.toString(16).padStart(2, "0")}${darkG
+  const result = `#${darkR.toString(16).padStart(2, "0")}${darkG
     .toString(16)
     .padStart(2, "0")}${darkB.toString(16).padStart(2, "0")}`;
+  darkenColorCache.set(cacheKey, result);
+  return result;
 }
 
 export function renderGrid(ctx, canvas, state, screenToWorld) {
@@ -602,6 +618,13 @@ export function renderSeats(
   draggedHandle = null,
 ) {
   const { seats, rows, sections } = state.scene;
+
+  // Index seats by row ONCE per pass (O(n)) so the rotated-row pivot centroid
+  // is an O(1) lookup instead of an Object.values(seats).filter(...) per seat
+  // (which was O(seats^2) per frame for layouts with rotated rows).
+  const seatsByRow = buildSeatsByRow(seats);
+  const getRowCentroid = makeRowCentroidGetter(seatsByRow);
+
   Object.values(seats).forEach((seat) => {
     if (!seat.rowId) {
       // Apply drag offset for selected standalone seats (e.g., table seats)
@@ -662,15 +685,9 @@ export function renderSeats(
       worldY += dragOffset.y;
     }
     if (row.transform && row.transform.rotation) {
-      // Get all seats in this row to calculate the center
-      const rowSeats = Object.values(seats).filter((s) => s.rowId === row.id);
-      if (rowSeats.length > 0) {
-        // Calculate center of seats for rotation pivot
-        const centerX =
-          rowSeats.reduce((sum, s) => sum + s.localX, 0) / rowSeats.length;
-        const centerY =
-          rowSeats.reduce((sum, s) => sum + s.localY, 0) / rowSeats.length;
-
+      // Rotation pivot = centroid of the row's seats (O(1) cached lookup).
+      const { cx: centerX, cy: centerY, count } = getRowCentroid(row.id);
+      if (count > 0) {
         // Apply rotation around the center of seats
         const cos = Math.cos(row.transform.rotation);
         const sin = Math.sin(row.transform.rotation);
@@ -753,7 +770,7 @@ export function renderSeats(
       const rowId = Array.from(selectedRowIds)[0];
       const row = rows[rowId];
       if (row) {
-        const rowSeats = Object.values(seats).filter((s) => s.rowId === rowId);
+        const rowSeats = seatsByRow.get(rowId) || [];
         const allSeatsSelected = rowSeats.every((s) =>
           state.selectedIds.includes(s.id),
         );
@@ -776,7 +793,7 @@ export function renderSeats(
       const row = rows[rowId];
       if (!row) return;
 
-      const rowSeats = Object.values(seats).filter((s) => s.rowId === rowId);
+      const rowSeats = seatsByRow.get(rowId) || [];
       if (rowSeats.length === 0) return;
 
       // Only render rotation handle if all seats in the row are selected

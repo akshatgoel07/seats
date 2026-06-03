@@ -7,7 +7,16 @@ import {
   COLOR_UNAVAILABLE,
   COLOR_BLOCKED,
   COLOR_DEFAULT,
-} from "./constants";
+} from "./constants.js";
+
+/**
+ * Module-level memo cache for darkenColor. A layout only uses a handful of
+ * distinct (color, factor) pairs, but darkenColor is called once per seat when
+ * (re)building the seat color maps, so caching turns thousands of hex parses +
+ * string allocations into a single Map lookup.
+ * @type {Map<string, string>}
+ */
+const darkenColorCache = new Map();
 
 /**
  * Convert hex color to darker version by reducing RGB values
@@ -16,6 +25,10 @@ import {
  * @returns {string} Darker hex color
  */
 export function darkenColor(hexColor, factor = 0.4) {
+  const cacheKey = `${hexColor}|${factor}`;
+  const cached = darkenColorCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
   // Remove # if present
   const hex = hexColor.replace("#", "");
 
@@ -30,9 +43,11 @@ export function darkenColor(hexColor, factor = 0.4) {
   const darkB = Math.max(0, Math.floor(b * (1 - factor)));
 
   // Convert back to hex
-  return `#${darkR.toString(16).padStart(2, "0")}${darkG
+  const result = `#${darkR.toString(16).padStart(2, "0")}${darkG
     .toString(16)
     .padStart(2, "0")}${darkB.toString(16).padStart(2, "0")}`;
+  darkenColorCache.set(cacheKey, result);
+  return result;
 }
 
 /**

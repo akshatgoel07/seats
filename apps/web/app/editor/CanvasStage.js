@@ -42,6 +42,7 @@ import {
   getItemsInRect as getItemsInRectUtil,
   hitTestPathSegment,
 } from "./canvas/hitTest.js";
+import { buildSeatsByRow, makeRowCentroidGetter } from "./canvas/seatIndex.js";
 import { useSeatTypes } from "./hooks/useSeatTypes.js";
 import { useMouseDown } from "./hooks/useMouseDown.js";
 import { useParams } from "next/navigation";
@@ -384,6 +385,11 @@ export default function CanvasStage() {
         }
       };
 
+      // Index seats by row once so rotated-row pivots are O(1) (was O(seats^2)
+      // because snapping runs over every seat on each drag move).
+      const seatsByRow = buildSeatsByRow(state.scene.seats);
+      const getRowCentroid = makeRowCentroidGetter(seatsByRow);
+
       Object.values(state.scene.seats).forEach((seat) => {
         if (!seat.rowId) {
           checkDistance(seat.localX, seat.localY);
@@ -393,16 +399,8 @@ export default function CanvasStage() {
           let seatWorldX = seat.localX;
           let seatWorldY = seat.localY;
           if (row.transform && row.transform.rotation) {
-            const rowSeats = Object.values(state.scene.seats).filter(
-              (s) => s.rowId === row.id,
-            );
-            if (rowSeats.length > 0) {
-              const centerX =
-                rowSeats.reduce((sum, s) => sum + s.localX, 0) /
-                rowSeats.length;
-              const centerY =
-                rowSeats.reduce((sum, s) => sum + s.localY, 0) /
-                rowSeats.length;
+            const { cx: centerX, cy: centerY, count } = getRowCentroid(row.id);
+            if (count > 0) {
               const cos = Math.cos(row.transform.rotation);
               const sin = Math.sin(row.transform.rotation);
               const relativeX = seatWorldX - centerX;
@@ -690,6 +688,9 @@ export default function CanvasStage() {
   const getMultiSelectionHandle = useCallback(
     (screenX, screenY) => {
       const { seats, rows, sections } = state.scene;
+      // Index seats by row once so rotated-row pivots are O(1).
+      const seatsByRow = buildSeatsByRow(seats);
+      const getRowCentroid = makeRowCentroidGetter(seatsByRow);
       const selectedSeatsList = state.selectedIds
         .map((id) => seats[id])
         .filter(Boolean);
@@ -739,16 +740,8 @@ export default function CanvasStage() {
         if (seat.rowId) {
           const row = rows[seat.rowId];
           if (row && row.transform && row.transform.rotation) {
-            const rowSeatsList = Object.values(seats).filter(
-              (s) => s.rowId === row.id,
-            );
-            if (rowSeatsList.length > 0) {
-              const centerX =
-                rowSeatsList.reduce((sum, s) => sum + s.localX, 0) /
-                rowSeatsList.length;
-              const centerY =
-                rowSeatsList.reduce((sum, s) => sum + s.localY, 0) /
-                rowSeatsList.length;
+            const { cx: centerX, cy: centerY, count } = getRowCentroid(row.id);
+            if (count > 0) {
               const cos = Math.cos(row.transform.rotation);
               const sin = Math.sin(row.transform.rotation);
               const relativeX = worldX - centerX;

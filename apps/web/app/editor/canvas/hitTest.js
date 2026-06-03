@@ -1,3 +1,5 @@
+import { buildSeatsByRow, makeRowCentroidGetter } from "./seatIndex.js";
+
 // Helper function to calculate a point on a cubic Bezier curve
 function getBezierPoint(p0, p1, p2, p3, t) {
   const u = 1 - t;
@@ -603,6 +605,9 @@ export function hitTestElement(worldX, worldY, state, ELEMENT_TYPES) {
 
 export function hitTestSeat(worldX, worldY, state) {
   const { seats, rows, sections } = state.scene;
+  // Index seats by row once so rotated-row pivots are O(1) (was O(seats^2)).
+  const seatsByRow = buildSeatsByRow(seats);
+  const getRowCentroid = makeRowCentroidGetter(seatsByRow);
   let closestSeat = null;
   let closestDistance = Infinity;
   for (const seat of Object.values(seats)) {
@@ -630,15 +635,9 @@ export function hitTestSeat(worldX, worldY, state) {
     let seatWorldX = seat.localX;
     let seatWorldY = seat.localY;
     if (row.transform && row.transform.rotation) {
-      // Get all seats in this row to calculate the center
-      const rowSeats = Object.values(seats).filter((s) => s.rowId === row.id);
-      if (rowSeats.length > 0) {
-        // Calculate center of seats for rotation pivot
-        const centerX =
-          rowSeats.reduce((sum, s) => sum + s.localX, 0) / rowSeats.length;
-        const centerY =
-          rowSeats.reduce((sum, s) => sum + s.localY, 0) / rowSeats.length;
-
+      // Rotation pivot = centroid of the row's seats (O(1) cached lookup).
+      const { cx: centerX, cy: centerY, count } = getRowCentroid(row.id);
+      if (count > 0) {
         // Apply rotation around the center of seats
         const cos = Math.cos(row.transform.rotation);
         const sin = Math.sin(row.transform.rotation);
@@ -837,6 +836,9 @@ export function hitTestPathSegment(worldX, worldY, element, tolerance = 10) {
 
 export function getItemsInRect(startX, startY, endX, endY, state) {
   const { seats, rows, sections, elements } = state.scene;
+  // Index seats by row once so rotated-row pivots are O(1) (was O(seats^2)).
+  const seatsByRow = buildSeatsByRow(seats);
+  const getRowCentroid = makeRowCentroidGetter(seatsByRow);
   const minX = Math.min(startX, endX);
   const maxX = Math.max(startX, endX);
   const minY = Math.min(startY, endY);
@@ -874,15 +876,9 @@ export function getItemsInRect(startX, startY, endX, endY, state) {
     let seatWorldX = seat.localX;
     let seatWorldY = seat.localY;
     if (row.transform && row.transform.rotation) {
-      // Get all seats in this row to calculate the center
-      const rowSeats = Object.values(seats).filter((s) => s.rowId === row.id);
-      if (rowSeats.length > 0) {
-        // Calculate center of seats for rotation pivot
-        const centerX =
-          rowSeats.reduce((sum, s) => sum + s.localX, 0) / rowSeats.length;
-        const centerY =
-          rowSeats.reduce((sum, s) => sum + s.localY, 0) / rowSeats.length;
-
+      // Rotation pivot = centroid of the row's seats (O(1) cached lookup).
+      const { cx: centerX, cy: centerY, count } = getRowCentroid(row.id);
+      if (count > 0) {
         // Apply rotation around the center of seats
         const cos = Math.cos(row.transform.rotation);
         const sin = Math.sin(row.transform.rotation);
