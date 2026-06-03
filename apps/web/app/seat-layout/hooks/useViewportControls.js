@@ -44,10 +44,40 @@ export function useViewportControls(contentBounds, svgRef) {
   const hasInitialized = useRef(false);
   const [screenAspectRatio, setScreenAspectRatio] = useState(1);
 
+  // R8: drive pan/zoom imperatively during a gesture so we don't run React
+  // (visibleSeats cull + reconciling thousands of <SeatElement>s) on every
+  // frame. These refs hold the live gesture state; React state (viewBox) is only
+  // committed once the gesture settles.
+  const isDraggingRef = useRef(false);
+  const lastPanPointRef = useRef(/** @type {{ x: number, y: number } | null} */ (null));
+  const svgRectRef = useRef(/** @type {DOMRect | null} */ (null));
+  const pendingPanRef = useRef({ dx: 0, dy: 0 });
+  const wheelCommitTimerRef = useRef(/** @type {any} */ (null));
+
   // Keep ref synced with state
   useEffect(() => {
     viewBoxRef.current = viewBox;
   }, [viewBox]);
+
+  /**
+   * Apply a viewBox imperatively: update the ref + write the attribute directly
+   * on the <svg> so the browser reframes the (already-rendered) seats by simple
+   * compositing — without a React re-render. setViewBox is called separately to
+   * commit the final value at gesture end.
+   */
+  const applyViewBoxImperative = useCallback(
+    (vb) => {
+      viewBoxRef.current = vb;
+      const svg = svgRef.current;
+      if (svg) {
+        svg.setAttribute(
+          "viewBox",
+          `${vb.x} ${vb.y} ${vb.width} ${vb.height}`,
+        );
+      }
+    },
+    [svgRef],
+  );
 
   /**
    * Update screen aspect ratio on resize
@@ -94,104 +124,109 @@ export function useViewportControls(contentBounds, svgRef) {
 
         const scale = e.deltaY > 0 ? ZOOM_WHEEL_SCALE_IN : ZOOM_WHEEL_SCALE_OUT;
 
-        requestAnimationFrame(() => {
-          setViewBox((prev) => {
-            const newWidth = prev.width * scale;
+        // R8: zoom imperatively against the live viewBox ref (no per-event React
+        // render), then debounce a single setViewBox commit once the wheel
+        // settles so the cull / LOD recompute happens once, not per tick.
+        if (panAnimationFrameRef.current) {
+          cancelAnimationFrame(panAnimationFrameRef.current);
+        }
+        panAnimationFrameRef.current = requestAnimationFrame(() => {
+          panAnimationFrameRef.current = null;
+          const prev = viewBoxRef.current;
+          const newWidth = prev.width * scale;
 
-            // Bounds checking - prevent over-zooming
-            const minWidth = MIN_VIEWBOX_WIDTH;
-            const maxWidth = MAX_VIEWBOX_WIDTH; // Allow unlimited zoom out like the editor
-            const clampedWidth = Math.max(
-              minWidth,
-              Math.min(maxWidth, newWidth),
-            );
+          const minWidth = MIN_VIEWBOX_WIDTH;
+          const maxWidth = MAX_VIEWBOX_WIDTH;
+          const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+          const clampedHeight = clampedWidth * screenAspectRatio;
+          const actualScale = clampedWidth / prev.width;
 
-            // Maintain screen aspect ratio for consistent panning
-            const clampedHeight = clampedWidth * screenAspectRatio;
+          const newX = prev.x + (svgX - prev.x) * (1 - actualScale);
+          const newY = prev.y + (svgY - prev.y) * (1 - actualScale);
 
-            const actualScale = clampedWidth / prev.width;
-
-            // Calculate zoom towards mouse position
-            let newX = prev.x + (svgX - prev.x) * (1 - actualScale);
-            let newY = prev.y + (svgY - prev.y) * (1 - actualScale);
-
-            // Don't clamp position - allow free panning like the editor
-            return {
-              ...prev,
-              x: newX,
-              y: newY,
-              width: clampedWidth,
-              height: clampedHeight,
-            };
+          applyViewBoxImperative({
+            ...prev,
+            x: newX,
+            y: newY,
+            width: clampedWidth,
+            height: clampedHeight,
           });
         });
+
+        if (wheelCommitTimerRef.current) {
+          clearTimeout(wheelCommitTimerRef.current);
+        }
+        wheelCommitTimerRef.current = setTimeout(() => {
+          setViewBox(viewBoxRef.current);
+        }, 140);
       }
     },
-    [svgRef, screenAspectRatio],
+    [svgRef, screenAspectRatio, applyViewBoxImperative],
   );
 
   /**
    * Handle mouse down for panning
    */
-  const handleMouseDown = useCallback((e) => {
-    if (e.button === 0) {
-      setIsDragging(true);
-      setLastPanPoint({ x: e.clientX, y: e.clientY });
-    }
-  }, []);
-
-  /**
-   * Handle mouse move for panning
-   */
-  const handleMouseMove = useCallback(
+  const handleMouseDown = useCallback(
     (e) => {
-      if (isDragging && lastPanPoint) {
+      if (e.button === 0) {
+        setIsDragging(true); // state, for the drag cursor overlay (down/up only)
+        isDraggingRef.current = true;
+        lastPanPointRef.current = { x: e.clientX, y: e.clientY };
+        pendingPanRef.current = { dx: 0, dy: 0 };
+        // Cache the SVG rect once per gesture instead of calling
+        // getBoundingClientRect (forced layout) on every move.
         const svg = svgRef.current;
-        if (!svg) return;
-
-        // Get screen pixel deltas
-        const dx = e.clientX - lastPanPoint.x;
-        const dy = e.clientY - lastPanPoint.y;
-
-        // Convert screen pixel movement to SVG coordinate movement
-        // Use a uniform scale based on the viewBox width to ensure consistent panning speed
-        // in both horizontal and vertical directions regardless of screen aspect ratio
-        const rect = svg.getBoundingClientRect();
-        const scale = viewBox.width / rect.width;
-
-        // Use requestAnimationFrame for smooth panning, especially when zoomed out
-        if (panAnimationFrameRef.current) {
-          cancelAnimationFrame(panAnimationFrameRef.current);
-        }
-
-        panAnimationFrameRef.current = requestAnimationFrame(() => {
-          setViewBox((prev) => {
-            // Apply uniform scale for consistent drag behavior in all directions
-            let newX = prev.x - dx * scale;
-            let newY = prev.y - dy * scale;
-
-            // Don't clamp panning - allow free panning like the editor
-            return {
-              ...prev,
-              x: newX,
-              y: newY,
-            };
-          });
-          panAnimationFrameRef.current = null;
-        });
-
-        setLastPanPoint({ x: e.clientX, y: e.clientY });
+        svgRectRef.current = svg ? svg.getBoundingClientRect() : null;
       }
     },
-    [isDragging, lastPanPoint, svgRef, viewBox.width],
+    [svgRef],
   );
 
   /**
-   * Handle mouse up to stop panning
+   * Handle mouse move for panning. R8: accumulate deltas and apply ONE
+   * imperative viewBox update per animation frame — no React state per move.
+   */
+  const handleMouseMove = useCallback(
+    (e) => {
+      if (!isDraggingRef.current || !lastPanPointRef.current) return;
+
+      pendingPanRef.current.dx += e.clientX - lastPanPointRef.current.x;
+      pendingPanRef.current.dy += e.clientY - lastPanPointRef.current.y;
+      lastPanPointRef.current = { x: e.clientX, y: e.clientY };
+
+      if (panAnimationFrameRef.current != null) return; // a frame is already queued
+      panAnimationFrameRef.current = requestAnimationFrame(() => {
+        panAnimationFrameRef.current = null;
+        const rect =
+          svgRectRef.current ||
+          (svgRef.current ? svgRef.current.getBoundingClientRect() : null);
+        if (!rect) return;
+        const prev = viewBoxRef.current;
+        const scale = prev.width / rect.width;
+        const { dx, dy } = pendingPanRef.current;
+        pendingPanRef.current = { dx: 0, dy: 0 };
+        applyViewBoxImperative({
+          ...prev,
+          x: prev.x - dx * scale,
+          y: prev.y - dy * scale,
+        });
+      });
+    },
+    [svgRef, applyViewBoxImperative],
+  );
+
+  /**
+   * Handle mouse up to stop panning. Commit the imperatively-updated viewBox to
+   * React state once so the cull / LOD / dependent UI recompute a single time.
    */
   const handleMouseUp = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    lastPanPointRef.current = null;
+    svgRectRef.current = null;
     setIsDragging(false);
-    setLastPanPoint(null);
+    setViewBox(viewBoxRef.current);
   }, []);
 
   /**

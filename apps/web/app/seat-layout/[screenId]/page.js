@@ -1,5 +1,11 @@
 "use client";
-import React, { useState, useRef, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useRef,
+  useCallback,
+  useMemo,
+  useLayoutEffect,
+} from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import {
   StandingSectionModal,
@@ -102,6 +108,21 @@ const SeatLayout = () => {
     zoomToElement,
     viewBoxRef, // Added viewBoxRef
   } = useViewportControls(contentBounds, svgRef);
+
+  // R8: drive the SVG viewBox imperatively rather than via JSX. During a pan/zoom
+  // gesture useViewportControls writes the attribute directly (no React render);
+  // this effect syncs it for programmatic changes (zoom buttons, seat-click zoom,
+  // initial mount). Because viewBox is no longer a JSX attribute, an unrelated
+  // re-render mid-gesture (hover, FPS tick) can't reset the pan position.
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (svg) {
+      svg.setAttribute(
+        "viewBox",
+        `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`,
+      );
+    }
+  }, [viewBox]);
 
   // Use custom hook  // Seat selection state
   // Using viewBoxRef for event handlers to prevent re-renders, but updating viewBox state for rendering
@@ -536,7 +557,6 @@ const SeatLayout = () => {
       <div className="flex-1 relative" style={{ touchAction: "none" }}>
         <svg
           ref={svgRef}
-          viewBox={`${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`}
           className="w-full h-full cursor"
           style={{ touchAction: "none", userSelect: "none" }}
           onWheel={handleWheel}
