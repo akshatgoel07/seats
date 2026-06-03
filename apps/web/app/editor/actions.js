@@ -80,40 +80,28 @@ export function useActionCreators(dispatch, state) {
 
     // Zoom to fit all content in the viewport
     zoomToFit: (canvasWidth, canvasHeight, padding = 50) => {
-      const { seats, rows, elements } = stateRef.current.scene;
+      const { seats, elements } = stateRef.current.scene;
 
       // Calculate bounding box of all content
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       let hasContent = false;
 
-      // Include seats
-      seats.forEach(seat => {
+      // Include seats. NOTE: scene.seats is a map keyed by id (not an array),
+      // and seat positions are localX/localY — the previous code iterated it as
+      // an array and read seat.x/seat.y, so it threw and zoom-to-fit silently
+      // never worked.
+      Object.values(seats).forEach((seat) => {
         hasContent = true;
         const halfWidth = (seat.width || 20) / 2;
         const halfHeight = (seat.height || 20) / 2;
-        minX = Math.min(minX, seat.x - halfWidth);
-        minY = Math.min(minY, seat.y - halfHeight);
-        maxX = Math.max(maxX, seat.x + halfWidth);
-        maxY = Math.max(maxY, seat.y + halfHeight);
+        minX = Math.min(minX, seat.localX - halfWidth);
+        minY = Math.min(minY, seat.localY - halfHeight);
+        maxX = Math.max(maxX, seat.localX + halfWidth);
+        maxY = Math.max(maxY, seat.localY + halfHeight);
       });
 
-      // Include rows (their seats)
-      rows.forEach(row => {
-        if (row.seats) {
-          row.seats.forEach(seat => {
-            hasContent = true;
-            const halfWidth = (seat.width || 20) / 2;
-            const halfHeight = (seat.height || 20) / 2;
-            minX = Math.min(minX, seat.x - halfWidth);
-            minY = Math.min(minY, seat.y - halfHeight);
-            maxX = Math.max(maxX, seat.x + halfWidth);
-            maxY = Math.max(maxY, seat.y + halfHeight);
-          });
-        }
-      });
-
-      // Include elements
-      elements.forEach(element => {
+      // Include elements (also a map keyed by id)
+      Object.values(elements).forEach((element) => {
         hasContent = true;
         if (element.type === "rectangle" || element.type === "image" || element.type === "text") {
           const halfWidth = (element.width || 100) / 2;
