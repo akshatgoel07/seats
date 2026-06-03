@@ -127,15 +127,6 @@ export function editorReducer(state, action) {
         !Object.prototype.hasOwnProperty.call(updates, "spacing") &&
         !Object.prototype.hasOwnProperty.call(updates, "curve");
 
-      console.log("UPDATE_ROW:", {
-        id,
-        updates,
-        onlySeatCountChanged,
-        prevRow: prevRow
-          ? { ...prevRow, geometry: { ...prevRow.geometry } }
-          : null,
-      });
-
       if (
         updates.geometry ||
         updates.seatCount ||
@@ -143,22 +134,12 @@ export function editorReducer(state, action) {
         updates.curve
       ) {
         if (onlySeatCountChanged) {
-          console.log("Taking onlySeatCountChanged path");
           const existingSeats = Object.values(state.scene.seats)
             .filter((s) => s.rowId === id)
             .slice();
 
           if (existingSeats.length >= 1) {
             const row = prevRow;
-            console.log("Row geometry before seat update:", {
-              kind: row.geometry.kind,
-              center: row.geometry.center,
-              radiusX: row.geometry.radiusX,
-              radiusY: row.geometry.radiusY,
-              startAngle: row.geometry.startAngle,
-              endAngle: row.geometry.endAngle,
-              aspectRatio: row.geometry.radiusX / row.geometry.radiusY,
-            });
             let sorted = existingSeats.slice();
             if (row.geometry.kind === "line") {
               sorted.sort((a, b) =>
@@ -262,16 +243,6 @@ export function editorReducer(state, action) {
               const { radiusX, radiusY, startAngle, endAngle } = row.geometry;
               const a0 = Math.atan2(first.localY - c.y, first.localX - c.x);
 
-              console.log("Arc positioning:", {
-                center: c,
-                radiusX,
-                radiusY,
-                startAngle,
-                endAngle,
-                desiredCount,
-                spacingDistance,
-              });
-
               for (let i = 0; i < desiredCount; i++) {
                 const targetLength = i * spacingDistance;
                 const angle = findAngleForArcLength(
@@ -304,12 +275,6 @@ export function editorReducer(state, action) {
                   localY += normalY * curveOffset;
                 }
 
-                console.log(
-                  `Seat ${i}: angle=${angle.toFixed(3)}, pos=(${localX.toFixed(
-                    1,
-                  )}, ${localY.toFixed(1)})`,
-                );
-
                 created.push({
                   ...sorted[0],
                   id: generateId(),
@@ -326,27 +291,6 @@ export function editorReducer(state, action) {
             });
 
             updatedRow.spacing = spacingDistance;
-
-            console.log("Row geometry after seat update:", {
-              kind: updatedRow.geometry.kind,
-              center: updatedRow.geometry.center,
-              radiusX: updatedRow.geometry.radiusX,
-              radiusY: updatedRow.geometry.radiusY,
-              startAngle: updatedRow.geometry.startAngle,
-              endAngle: updatedRow.geometry.endAngle,
-              aspectRatio:
-                updatedRow.geometry.radiusX / updatedRow.geometry.radiusY,
-            });
-
-            console.log(
-              "New seat positions:",
-              created.map((s) => ({
-                id: s.id,
-                label: s.label,
-                localX: s.localX,
-                localY: s.localY,
-              })),
-            );
 
             // Reselect seats by index where possible
             if (prevSelectedIndexes.length > 0) {
@@ -369,9 +313,6 @@ export function editorReducer(state, action) {
         }
 
         // Default: regenerate using geometry helper
-        console.log(
-          "Taking default path - regenerating seats with generateSeatsForRow",
-        );
         Object.keys(newSeats).forEach((seatId) => {
           if (newSeats[seatId].rowId === id) delete newSeats[seatId];
         });
@@ -403,15 +344,6 @@ export function editorReducer(state, action) {
           state.globalSettings,
           existingRowSeats,
           rowIndex >= 0 ? rowIndex : null,
-        );
-        console.log(
-          "Generated seats:",
-          rowSeats.map((s) => ({
-            id: s.id,
-            label: s.label,
-            localX: s.localX,
-            localY: s.localY,
-          })),
         );
         rowSeats.forEach((seat) => {
           newSeats[seat.id] = seat;
@@ -598,8 +530,6 @@ export function editorReducer(state, action) {
       const newSeats = { ...state.scene.seats };
       const newRows = { ...state.scene.rows };
 
-      console.log("ADJUST_SEAT_SPACING:", { seatIds, spacingDelta });
-
       // Only adjust spacing for seats that are in the same row
       const seatsByRow = {};
       seatIds.forEach((seatId) => {
@@ -611,11 +541,6 @@ export function editorReducer(state, action) {
           seatsByRow[seat.rowId].push(seat);
         }
       });
-
-      console.log(
-        "Number of rows being processed:",
-        Object.keys(seatsByRow).length,
-      );
 
       // Process each row separately
       Object.keys(seatsByRow).forEach((rowId) => {
@@ -670,23 +595,12 @@ export function editorReducer(state, action) {
 
             // Calculate the actual arc length between the first and last seat
             // This is the most direct and accurate approach
-            const angleSpan = Math.abs(angle2 - angle1);
             totalLength = calculateEllipticalArcLength(
               row.geometry.radiusX,
               row.geometry.radiusY,
               Math.min(angle1, angle2), // Start from the smaller angle
               Math.max(angle1, angle2), // End at the larger angle
             );
-
-            console.log("Arc spacing adjustment:", {
-              radiusX: row.geometry.radiusX,
-              radiusY: row.geometry.radiusY,
-              angle1: angle1.toFixed(3),
-              angle2: angle2.toFixed(3),
-              angleSpan: angleSpan.toFixed(3),
-              totalLength: totalLength.toFixed(1),
-              spacingDelta,
-            });
 
             segmentDirection = {
               x: lastSeat.localX - firstSeat.localX,
@@ -785,18 +699,6 @@ export function editorReducer(state, action) {
                 localX += normalX * curveOffset;
                 localY += normalY * curveOffset;
               }
-
-              console.log(
-                `  Seat ${i}: t=${t.toFixed(
-                  3,
-                )}, firstAngle=${firstSeatAngle.toFixed(
-                  3,
-                )}, lastAngle=${lastSeatAngle.toFixed(
-                  3,
-                )}, targetAngle=${targetAngle.toFixed(
-                  3,
-                )}, newPos=(${localX.toFixed(1)}, ${localY.toFixed(1)})`,
-              );
 
               newSeats[seat.id] = {
                 ...seat,
@@ -1456,8 +1358,11 @@ export function editorReducer(state, action) {
 
     case ACTIONS.COMMIT_TO_HISTORY: {
       // Commit the current scene state to history (used after continuous updates)
-      // This updates the present state in history without saving to past
-      const currentSceneSnapshot = JSON.parse(JSON.stringify(state.scene));
+      // This updates the present state in history without saving to past.
+      // structuredClone is a native deep copy that avoids the cost of
+      // JSON string (de)serialization over the full (potentially multi-thousand
+      // seat) scene on every commit.
+      const currentSceneSnapshot = structuredClone(state.scene);
 
       return {
         ...state,

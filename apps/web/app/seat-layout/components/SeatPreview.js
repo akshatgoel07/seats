@@ -334,21 +334,10 @@ const SeatPreview = React.memo((
   // Renders differently based on whether boundary paths exist
   const previewSeats = useMemo(() => {
     if (!hasSeats || !previewData) {
-      console.log('[SeatPreview] No seats or preview data available');
       return [];
     }
 
-
     const { scale, offsetX, offsetY, bounds, width: previewWidth, height: previewHeight } = previewData;
-
-    console.log('[SeatPreview] Preview calculation starting:', {
-      totalSeats: Object.keys(seatMap).length,
-      scale,
-      bounds,
-      previewDimensions: { width: previewWidth, height: previewHeight },
-      hasBoundaryPaths
-    });
-
 
 
     // Configuration based on layout type

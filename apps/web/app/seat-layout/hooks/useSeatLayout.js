@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import ApiService from "@/services/api";
-import { calculateOpenSeats, getSeatAvailabilityBreakdown } from "../utils";
+import { calculateOpenSeats } from "../utils";
 import {
   buildSeatMap,
   buildSeatStatusMap,
@@ -164,19 +164,6 @@ export function useSeatLayout(screenId, ssId, mdId) {
     if (layoutData?.Records && Array.isArray(layoutData.Records)) {
       const result = calculateOpenSeats(layoutData.Records);
       setOpenSeatsCount(result.totalOpenSeats);
-
-      // Log detailed breakdown for debugging (optional)
-      if (result.missingFields > 0) {
-        console.log(
-          `⚠️ Seats with missing fields: ${result.missingFields} (treated as regular seats)`,
-        );
-      }
-
-      // Log breakdown by category for more detailed analysis
-      const breakdown = getSeatAvailabilityBreakdown(layoutData.Records);
-      if (breakdown.missingFields > 0) {
-        console.log(`⚠️ Seats with missing fields: ${breakdown.missingFields}`);
-      }
     }
   }, [layoutData]);
 

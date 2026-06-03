@@ -212,8 +212,6 @@ const SeatLayout = () => {
   // Get visible seats only (viewport culling for performance)
   // Also filter out seats that are behind seating section images when images are visible
   const visibleSeats = useMemo(() => {
-    console.time("visibleSeats calculation");
-
     // Hide all seats when zoomed out beyond threshold (improves performance)
     // Skip this logic if showSectionBoundaryInRenderer is false
     if (showSectionBoundaryInRenderer && viewBox.width > SEAT_HIDE_THRESHOLD) {
@@ -349,8 +347,6 @@ const SeatLayout = () => {
       return true;
     });
 
-    console.timeEnd("visibleSeats calculation");
-    console.log(`Visible seats count: ${result.length}`);
     return result;
   }, [
     seatMap,
@@ -1629,10 +1625,6 @@ const SeatLayout = () => {
         <StandingSectionModal
           isOpen={showStandingPopup}
           onClose={() => {
-            console.log(
-              "🔍 Modal onClose called - closing without purchase, quantity will remain:",
-              standingQuantity,
-            );
             closeStandingPopup();
           }}
           selectedStandingSection={selectedStandingSection}
