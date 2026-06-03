@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useMemo } from "react";
 import { useEditor } from "./EditorContext.js";
 import {
   createSection,
@@ -37,29 +37,42 @@ export default function PropertiesPanel({ isVisible = true, onClose, onOpen }) {
   const { seatTypes, regularSeatTypes, standingSections } =
     useSeatTypes(screenId);
 
-  // Map API seat types to category structure expected by UI (only regular seats, not open seating areas)
-  const categories = regularSeatTypes
-    .map((seatType) => ({
-      id: seatType.sst_id.toString(),
-      name: seatType.sst_seat_type,
-      color: seatType.sst_seat_color_code,
-      price: 100, // Default price since not in API response
-      order: seatType.sst_order,
-    }))
-    .sort((a, b) => a.order - b.order);
+  // Map API seat types to category structure expected by UI (only regular seats,
+  // not open seating areas). R12: memoized — PropertiesPanel re-renders on every
+  // editor state change (incl. pan), so these derived arrays must not recompute
+  // unless their real inputs change.
+  const categories = useMemo(
+    () =>
+      regularSeatTypes
+        .map((seatType) => ({
+          id: seatType.sst_id.toString(),
+          name: seatType.sst_seat_type,
+          color: seatType.sst_seat_color_code,
+          price: 100, // Default price since not in API response
+          order: seatType.sst_order,
+        }))
+        .sort((a, b) => a.order - b.order),
+    [regularSeatTypes],
+  );
 
   // Get selected items
-  const selectedSeats = selectedIds
-    .filter((id) => scene.seats[id])
-    .map((id) => scene.seats[id]);
-  const selectedRows = selectedIds
-    .filter((id) => scene.rows[id])
-    .map((id) => scene.rows[id]);
-  const selectedElements = selectedIds
-    .filter((id) => scene.elements && scene.elements[id])
-    .map((id) => scene.elements[id]);
+  const selectedSeats = useMemo(
+    () => selectedIds.filter((id) => scene.seats[id]).map((id) => scene.seats[id]),
+    [selectedIds, scene.seats],
+  );
+  const selectedRows = useMemo(
+    () => selectedIds.filter((id) => scene.rows[id]).map((id) => scene.rows[id]),
+    [selectedIds, scene.rows],
+  );
+  const selectedElements = useMemo(
+    () =>
+      selectedIds
+        .filter((id) => scene.elements && scene.elements[id])
+        .map((id) => scene.elements[id]),
+    [selectedIds, scene.elements],
+  );
 
-  const inferredRowFromSelectedSeats = (() => {
+  const inferredRowFromSelectedSeats = useMemo(() => {
     const rowIds = Array.from(
       new Set(selectedSeats.map((s) => s.rowId).filter(Boolean)),
     );
@@ -67,10 +80,10 @@ export default function PropertiesPanel({ isVisible = true, onClose, onOpen }) {
       return scene.rows[rowIds[0]];
     }
     return null;
-  })();
+  }, [selectedSeats, scene.rows]);
 
   // Detect table and seat group selection
-  const tableAndSeatsGroup = (() => {
+  const tableAndSeatsGroup = useMemo(() => {
     // Check if we have exactly 1 table (circle element) and multiple seats
     const circleElements = selectedElements.filter(
       (el) => el.type === "circle",
@@ -104,7 +117,7 @@ export default function PropertiesPanel({ isVisible = true, onClose, onOpen }) {
     }
 
     return null;
-  })();
+  }, [selectedElements, selectedSeats]);
 
   const hasSelection = selectedIds.length > 0;
   const multipleSelected = selectedIds.length > 1;
