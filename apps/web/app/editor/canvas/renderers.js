@@ -625,6 +625,20 @@ export function renderSeats(
   const seatsByRow = buildSeatsByRow(seats);
   const getRowCentroid = makeRowCentroidGetter(seatsByRow);
 
+  // R9: viewport culling. worldToScreen yields CSS px; ctx.canvas is device px,
+  // so divide by dpr to get the visible CSS bounds and skip any seat whose screen
+  // position falls outside them (plus a small margin). Turns the per-frame draw
+  // from O(all seats) into O(on-screen seats) when zoomed in.
+  const dpr = (typeof window !== "undefined" && window.devicePixelRatio) || 1;
+  const cullW = ctx.canvas.width / dpr;
+  const cullH = ctx.canvas.height / dpr;
+  const CULL_MARGIN = 64;
+  const isOffscreen = (sp) =>
+    sp.x < -CULL_MARGIN ||
+    sp.x > cullW + CULL_MARGIN ||
+    sp.y < -CULL_MARGIN ||
+    sp.y > cullH + CULL_MARGIN;
+
   Object.values(seats).forEach((seat) => {
     if (!seat.rowId) {
       // Apply drag offset for selected standalone seats (e.g., table seats)
@@ -636,6 +650,7 @@ export function renderSeats(
         worldY += dragOffset.y;
       }
       const screenPos = worldToScreen(worldX, worldY);
+      if (isOffscreen(screenPos)) return;
       const screenWidth = seat.width * state.scene.view.scale;
       const screenHeight = seat.height * state.scene.view.scale;
       if (screenWidth < 1 || screenHeight < 1) return;
@@ -709,6 +724,7 @@ export function renderSeats(
       worldY = rotatedY + section.transform.y;
     }
     const screenPos = worldToScreen(worldX, worldY);
+    if (isOffscreen(screenPos)) return;
     const screenWidth = seat.width * state.scene.view.scale;
     const screenHeight = seat.height * state.scene.view.scale;
     if (screenWidth < 1 || screenHeight < 1) return;
