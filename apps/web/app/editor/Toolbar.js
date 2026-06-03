@@ -26,7 +26,7 @@ import Image from "next/image.js";
 import RowLineIcon from "../../public/icons/row.svg";
 import RowArcIcon from "../../public/icons/arc.svg";
 import RowSeatIcon from "../../public/icons/seat.svg";
-import { showToast } from "./components/Toast.js";
+import { showToast } from "@/app/lib/toast";
 
 const ToolButton = ({
   tool,

@@ -11,7 +11,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import { getAvailableStandingSeats } from "../utils/index";
-import { showToast } from "@/app/editor/components/Toast";
+import { showToast } from "@/app/lib/toast";
 
 /**
  * Custom hook for managing standing section modal

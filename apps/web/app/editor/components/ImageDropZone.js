@@ -2,7 +2,7 @@
 
 import React, { useState, useCallback } from "react";
 import { Upload } from "lucide-react";
-import { showToast } from "./Toast";
+import { showToast } from "@/app/lib/toast";
 
 export const ImageDropZone = ({ onImageUpload }) => {
   const [isDragActive, setIsDragActive] = useState(false);

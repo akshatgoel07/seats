@@ -26,7 +26,7 @@ import {
 } from "@/app/editor/types.js";
 import { generateSeatLabel } from "@/app/editor/seatNaming.js";
 import { useSeatTypes } from "@/app/editor/hooks/useSeatTypes.js";
-import { showToast } from "../components/Toast";
+import { showToast } from "@/app/lib/toast";
 import { FolderUp, X, Eye, EyeOff, Maximize2 } from "lucide-react";
 
 // Preview Panel Component - Shows miniature view of the entire seat layout
