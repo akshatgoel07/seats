@@ -9,7 +9,7 @@
  * - Content bounds clamping
  */
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, startTransition } from "react";
 import {
   clampViewBoxToBounds,
   getTouchDistance,
@@ -157,7 +157,7 @@ export function useViewportControls(contentBounds, svgRef) {
           clearTimeout(wheelCommitTimerRef.current);
         }
         wheelCommitTimerRef.current = setTimeout(() => {
-          setViewBox(viewBoxRef.current);
+          startTransition(() => setViewBox(viewBoxRef.current));
         }, 140);
       }
     },
@@ -226,7 +226,10 @@ export function useViewportControls(contentBounds, svgRef) {
     lastPanPointRef.current = null;
     svgRectRef.current = null;
     setIsDragging(false);
-    setViewBox(viewBoxRef.current);
+    // The view is already correct (set imperatively). Commit to React state as a
+    // non-urgent transition so the heavy recull/reconcile doesn't block the
+    // release; edge seats panned into view fill in a beat later.
+    startTransition(() => setViewBox(viewBoxRef.current));
   }, []);
 
   /**
