@@ -6,7 +6,7 @@ import {
   BLOCKED_RESERVE_TYPES,
   SEAT_STATUS_AVAILABLE,
   OPEN_SEATING_AREA_FLAG,
-} from "./constants";
+} from "./constants.js";
 
 /**
  * Check if a seat is disabled (unavailable for selection)
@@ -20,6 +20,57 @@ export function isSeatDisabled(seat) {
     seat.isVipReserved ||
     BLOCKED_RESERVE_TYPES.includes(seat.seat_reserve_type_id)
   );
+}
+
+/**
+ * R17 level-of-detail aggregation. Groups seats into one bounding box per row so
+ * the zoomed-out overview can draw ~(rows) rects instead of thousands of seats.
+ * Pure + unit-tested. Returns world-coordinate boxes with availability counts.
+ * @param {Record<string, any>} seatMap
+ * @returns {Array<{ id: string, x: number, y: number, width: number, height: number, total: number, available: number }>}
+ */
+export function buildRowAggregates(seatMap) {
+  const groups = new Map();
+  for (const seat of Object.values(seatMap || {})) {
+    const pos = seat && seat.position;
+    if (!pos) continue;
+    const key = seat.rowId || `__solo_${seat.sl_id}`;
+    const halfW = ((seat.dimensions && seat.dimensions.width) || 20) / 2;
+    const halfH = ((seat.dimensions && seat.dimensions.height) || 20) / 2;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        id: key,
+        minX: Infinity,
+        minY: Infinity,
+        maxX: -Infinity,
+        maxY: -Infinity,
+        total: 0,
+        available: 0,
+      };
+      groups.set(key, g);
+    }
+    if (pos.x - halfW < g.minX) g.minX = pos.x - halfW;
+    if (pos.y - halfH < g.minY) g.minY = pos.y - halfH;
+    if (pos.x + halfW > g.maxX) g.maxX = pos.x + halfW;
+    if (pos.y + halfH > g.maxY) g.maxY = pos.y + halfH;
+    g.total += 1;
+    if (!isSeatDisabled(seat)) g.available += 1;
+  }
+
+  const result = [];
+  groups.forEach((g) => {
+    result.push({
+      id: g.id,
+      x: g.minX,
+      y: g.minY,
+      width: g.maxX - g.minX,
+      height: g.maxY - g.minY,
+      total: g.total,
+      available: g.available,
+    });
+  });
+  return result;
 }
 
 /**

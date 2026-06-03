@@ -46,6 +46,9 @@ import {
   getViewportPadding,
   isSeatDisabled,
   shouldApplyOpacityFilter,
+  buildRowAggregates,
+  COLOR_UNAVAILABLE,
+  COLOR_DEFAULT,
 } from "../utils/index";
 
 const SeatLayout = () => {
@@ -123,6 +126,18 @@ const SeatLayout = () => {
       );
     }
   }, [viewBox]);
+
+  // R17: switch to the level-of-detail overview when an average seat would render
+  // smaller than this many CSS pixels — screen-relative, so it adapts to layout
+  // size and zoom (small layouts with large seats never trigger it; big venues
+  // show the overview at fit and individual seats once you zoom in). Layouts that
+  // use section-boundary images keep their own overview instead.
+  const isLODActive = useMemo(() => {
+    if (showSectionBoundaryInRenderer) return false;
+    if (typeof window === "undefined" || !viewBox.width) return false;
+    const seatScreenPx = (20 * window.innerWidth) / viewBox.width;
+    return seatScreenPx < 9;
+  }, [showSectionBoundaryInRenderer, viewBox.width]);
 
   // Use custom hook  // Seat selection state
   // Using viewBoxRef for event handlers to prevent re-renders, but updating viewBox state for rendering
@@ -234,9 +249,14 @@ const SeatLayout = () => {
   // Get visible seats only (viewport culling for performance)
   // Also filter out seats that are behind seating section images when images are visible
   const visibleSeats = useMemo(() => {
-    // Hide all seats when zoomed out beyond threshold (improves performance)
-    // Skip this logic if showSectionBoundaryInRenderer is false
-    if (showSectionBoundaryInRenderer && viewBox.width > SEAT_HIDE_THRESHOLD) {
+    // Hide individual seats at overview zoom (R17). When section-boundary images
+    // are used they take over (their own threshold); otherwise the level-of-detail
+    // aggregate rects (lodElements) stand in. Either way we skip building/rendering
+    // thousands of per-seat nodes at overview zoom.
+    if (
+      (showSectionBoundaryInRenderer && viewBox.width > SEAT_HIDE_THRESHOLD) ||
+      isLODActive
+    ) {
       return [];
     }
 
@@ -376,6 +396,7 @@ const SeatLayout = () => {
     canvasSceneData,
     viewportPadding,
     showSectionBoundaryInRenderer,
+    isLODActive,
   ]);
 
   // R11: memoize the rendered seat elements so unrelated re-renders (hover /
@@ -414,6 +435,32 @@ const SeatLayout = () => {
     handleMouseEnter,
     handleMouseLeave,
   ]);
+
+  // R17: level-of-detail. When zoomed out past SEAT_HIDE_THRESHOLD (and not
+  // using section-boundary images), draw one availability-tinted rect per row
+  // (~dozens of nodes) instead of thousands of seats. visibleSeats already
+  // returns [] at this zoom, so the seats aren't built either.
+  const rowAggregates = useMemo(() => buildRowAggregates(seatMap), [seatMap]);
+  const lodElements = useMemo(() => {
+    if (!isLODActive) return null;
+    return rowAggregates.map((r) => {
+      const ratio = r.total > 0 ? r.available / r.total : 0;
+      return (
+        <rect
+          key={r.id}
+          x={r.x}
+          y={r.y}
+          width={r.width}
+          height={r.height}
+          rx={4}
+          ry={4}
+          fill={ratio > 0 ? COLOR_DEFAULT : COLOR_UNAVAILABLE}
+          opacity={0.35 + 0.5 * ratio}
+          pointerEvents="none"
+        />
+      );
+    });
+  }, [isLODActive, rowAggregates]);
 
   // convert seat position (svg coords) -> screen coords
   const getScreenCoords = (seatPos) => {
@@ -1297,6 +1344,10 @@ const SeatLayout = () => {
           {/* seats - only render visible seats; memoized (R11) so hover/tooltip
               re-renders don't rebuild thousands of nodes */}
           {seatElements}
+
+          {/* R17: zoomed-out level-of-detail overview (one rect per row,
+              tinted by availability) in place of thousands of seats */}
+          {lodElements}
 
           {/* seating sections - render after seats for proper z-ordering */}
           {RENDER_SEATING_SECTION_IMAGES &&
