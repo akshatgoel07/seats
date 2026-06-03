@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { PropertySection, InputField, SelectField } from "./UIComponents.js";
 import { ChevronLeft, ChevronRight, RotateCcw, RotateCw } from "lucide-react";
 
@@ -118,27 +118,27 @@ export const RowProperties = ({
     });
   };
 
-  // Sync rotation angle when row selection changes or when row rotation changes
-  useEffect(() => {
-    // Get the current row's actual rotation in degrees
-    let currentRow = null;
-    if (selectedRows.length === 1) {
-      currentRow = selectedRows[0];
-    } else if (inferredRowFromSelectedSeats) {
-      currentRow = inferredRowFromSelectedSeats;
-    }
-
-    if (currentRow) {
-      const currentRotationDegrees = Math.round(
-        ((currentRow.transform?.rotation || 0) * 180) / Math.PI
-      );
-      setRotationAngle(currentRotationDegrees);
-      setPreviousRotation(currentRotationDegrees);
-    } else {
-      setRotationAngle(0);
-      setPreviousRotation(0);
-    }
-  }, [selectedRows, inferredRowFromSelectedSeats, scene.rows]);
+  // Sync the rotation field to the current row's actual rotation. Computed and
+  // applied during render (via a previous-value comparison) instead of in an
+  // effect, so the field never shows the previously selected row's angle for a
+  // frame before updating.
+  let currentRow = null;
+  if (selectedRows.length === 1) {
+    currentRow = selectedRows[0];
+  } else if (inferredRowFromSelectedSeats) {
+    currentRow = inferredRowFromSelectedSeats;
+  }
+  const currentRotationDegrees = currentRow
+    ? Math.round(((currentRow.transform?.rotation || 0) * 180) / Math.PI)
+    : 0;
+  const [prevRotationDegrees, setPrevRotationDegrees] = useState(
+    /** @type {number | null} */ (null),
+  );
+  if (currentRotationDegrees !== prevRotationDegrees) {
+    setPrevRotationDegrees(currentRotationDegrees);
+    setRotationAngle(currentRotationDegrees);
+    setPreviousRotation(currentRotationDegrees);
+  }
 
   const renderSingleRowProperties = (row) => (
     <>

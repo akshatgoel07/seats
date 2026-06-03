@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useLayoutEffect } from "react";
 
 const Tooltip = ({ children, content, position = "right" }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -8,7 +8,10 @@ const Tooltip = ({ children, content, position = "right" }) => {
   const triggerRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const tooltipRef = useRef(/** @type {HTMLDivElement | null} */ (null));
 
-  useEffect(() => {
+  // Measure the trigger/tooltip rects and position the tooltip before the
+  // browser paints. useLayoutEffect (not useEffect) runs synchronously after
+  // the DOM mutation, so the tooltip never flashes at its pre-measured spot.
+  useLayoutEffect(() => {
     if (isVisible && triggerRef.current && tooltipRef.current) {
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();

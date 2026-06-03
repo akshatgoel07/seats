@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { RotateCw, RotateCcw } from "lucide-react";
 import { PropertySection, InputField, SelectField } from "./UIComponents.js";
 
@@ -30,22 +30,36 @@ export const SeatProperties = ({
     return null;
   }, [selectedSeats, scene.rows]);
 
-  useEffect(() => {
+  // Reset the bulk-edit inputs whenever the seat selection changes. Adjusting
+  // the state during render (via a previous-value comparison) rather than in an
+  // effect means the panel never paints the prior selection's values for a
+  // frame before clearing them.
+  const selectionKey = selectedSeats.map((s) => s.id).join(",");
+  const [prevSelectionKey, setPrevSelectionKey] = useState(selectionKey);
+  if (selectionKey !== prevSelectionKey) {
+    setPrevSelectionKey(selectionKey);
     setBulkWidth("");
     setBulkHeight("");
     setBulkRadius("");
-    
-    if (inferredRowFromSelectedSeats) {
-      const currentRotationDegrees = Math.round(
-        ((inferredRowFromSelectedSeats.transform?.rotation || 0) * 180) / Math.PI
-      );
-      setRotationAngle(currentRotationDegrees);
-      setPreviousRotation(currentRotationDegrees);
-    } else {
-      setRotationAngle(0);
-      setPreviousRotation(0);
-    }
-  }, [selectedSeats.map((s) => s.id).join(","), inferredRowFromSelectedSeats, scene.rows]);
+  }
+
+  // Keep the rotation field in sync with the inferred row's actual rotation.
+  // Re-syncing during render avoids the stale-value flash a useEffect would
+  // cause when the selection changes or the row is rotated from the canvas.
+  const currentRotationDegrees = inferredRowFromSelectedSeats
+    ? Math.round(
+        ((inferredRowFromSelectedSeats.transform?.rotation || 0) * 180) /
+          Math.PI,
+      )
+    : 0;
+  const [prevRotationDegrees, setPrevRotationDegrees] = useState(
+    /** @type {number | null} */ (null),
+  );
+  if (currentRotationDegrees !== prevRotationDegrees) {
+    setPrevRotationDegrees(currentRotationDegrees);
+    setRotationAngle(currentRotationDegrees);
+    setPreviousRotation(currentRotationDegrees);
+  }
   const renderSingleSeatProperties = (seat) => (
     <>
       <InputField

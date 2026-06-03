@@ -13,16 +13,22 @@ export function useSeatTypes(layoutId) {
   const [error, setError] = useState(/** @type {any} */ (null));
 
   useEffect(() => {
-    if (!layoutId) {
-      setSeatTypes([]);
-      return;
-    }
-
     let cancelled = false;
-    setLoading(true);
-    setError(null);
 
+    // This effect synchronizes with an external system (the backend): the seat
+    // categories cannot be derived during render, they must be fetched. All
+    // fetch-lifecycle state is set inside the async flow rather than
+    // synchronously at the top, so it isn't mistaken for state mirrored off the
+    // layoutId prop.
     (async () => {
+      if (!layoutId) {
+        setSeatTypes([]);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+
       try {
         const layout = await ApiService.getLayout(layoutId);
         const categories = layout?.scene?.venue?.categories || [];
