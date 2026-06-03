@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test": "node --test --import ./app/test-setup.js \"app/**/*.test.js\"",
     "typecheck": "tsc --noEmit -p jsconfig.json",
     "lint": "eslint .",
     "doctor": "npx react-doctor@latest"

@@ -20,7 +20,7 @@ export function EditorProvider({ children }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (process.env.NODE_ENV === "production") return;
-    window.__EDITOR__ = {
+    /** @type {any} */ (window).__EDITOR__ = {
       state,
       actions,
       summary: () => ({

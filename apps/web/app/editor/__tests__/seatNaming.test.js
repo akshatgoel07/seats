@@ -47,9 +47,9 @@ describe('Seat Naming Convention', () => {
       expect(label2000).toBe('BXY');
       expect(label2000.length).toBeGreaterThan(0);
 
-      // Row index 5000
+      // Row index 5000 (bijective base-26: 5000 -> "GJI")
       const label5000 = getRowLabel(5000);
-      expect(label5000).toBe('GLA');
+      expect(label5000).toBe('GJI');
       expect(label5000.length).toBeGreaterThan(0);
     });
   });
@@ -73,7 +73,7 @@ describe('Seat Naming Convention', () => {
       expect(parseRowLabel('AAA')).toBe(702);
       expect(parseRowLabel('AAB')).toBe(703);
       expect(parseRowLabel('BXY')).toBe(2000);
-      expect(parseRowLabel('GLA')).toBe(5000);
+      expect(parseRowLabel('GJI')).toBe(5000);
     });
 
     test('should be case-insensitive', () => {
@@ -242,13 +242,13 @@ describe('Seat Naming Convention', () => {
       const totalSeats = 200 * 20;
       expect(totalSeats).toBe(4000);
 
-      // Row 200 (index 199) should be "GS"
+      // Row 200 (index 199) is bijective base-26 column 200 -> "GR"
       const row200Label = getRowLabel(199);
-      expect(row200Label).toBe('GS');
+      expect(row200Label).toBe('GR');
 
-      // Last seat should be "GS-20"
+      // Last seat should be "GR-20"
       const lastSeatLabel = generateSeatLabel(199, 20);
-      expect(lastSeatLabel).toBe('GS-20');
+      expect(lastSeatLabel).toBe('GR-20');
     });
 
     test('should handle arena with 26 rows and 100 seats each', () => {
