@@ -31,8 +31,6 @@ import {
   SEATING_SECTION_SHOW_LABEL_THRESHOLD,
   SEATING_SECTION_RENDER_PREVIEW_THRESHOLD,
   SEAT_HIDE_THRESHOLD,
-  VIEWPORT_PADDING_DESKTOP,
-  VIEWPORT_PADDING_MOBILE,
   SHOW_FPS_STATS,
   RENDER_PATHS,
   RENDER_IMAGES,
@@ -43,7 +41,6 @@ import {
   TEXT_HIDE_THRESHOLD,
   SHOW_SEAT_PREVIEW,
   SHOW_TOOLTIP,
-  getViewportPadding,
   isSeatDisabled,
   shouldApplyOpacityFilter,
   buildRowAggregates,
@@ -208,14 +205,6 @@ const SeatLayout = () => {
   // Use FPS monitoring hook
   const { fps, avgFps, minFps, reset } = useFPS();
 
-  // Calculate viewport padding based on device type
-  const viewportPadding = useMemo(() => {
-    return getViewportPadding(
-      VIEWPORT_PADDING_DESKTOP,
-      VIEWPORT_PADDING_MOBILE,
-    );
-  }, []);
-
   // Handle legend item click
   const handleLegendClick = useCallback((seatType) => {
     setSelectedLegendType((prev) => {
@@ -260,11 +249,18 @@ const SeatLayout = () => {
       return [];
     }
 
-    // Use device-aware viewport padding for consistent rendering threshold
-    const minX = viewBox.x - viewportPadding;
-    const minY = viewBox.y - viewportPadding;
-    const maxX = viewBox.x + viewBox.width + viewportPadding;
-    const maxY = viewBox.y + viewBox.height + viewportPadding;
+    // Cull to the viewport plus a PROPORTIONAL overscan (R9). A fixed padding
+    // (500/1500) is a huge margin at a zoomed-in viewBox, so it effectively
+    // disabled culling when zoomed in. Scaling the overscan to the viewBox keeps
+    // the rendered set tight at every zoom while still rendering enough beyond
+    // the edges that an imperative pan (R8, cull frozen mid-gesture) doesn't
+    // reveal blanks before it settles.
+    const overscanX = viewBox.width * 0.4;
+    const overscanY = viewBox.height * 0.4;
+    const minX = viewBox.x - overscanX;
+    const minY = viewBox.y - overscanY;
+    const maxX = viewBox.x + viewBox.width + overscanX;
+    const maxY = viewBox.y + viewBox.height + overscanY;
 
     // Check if seating section overlays should be visible (not zoomed in too much)
     const shouldHideOverlays =
@@ -394,7 +390,6 @@ const SeatLayout = () => {
     seatMap,
     viewBox,
     canvasSceneData,
-    viewportPadding,
     showSectionBoundaryInRenderer,
     isLODActive,
   ]);
