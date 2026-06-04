@@ -14,8 +14,6 @@ import {
   clampViewBoxToBounds,
   getTouchDistance,
   getTouchCenter,
-  ZOOM_WHEEL_SCALE_IN,
-  ZOOM_WHEEL_SCALE_OUT,
   ZOOM_IN_SCALE,
   ZOOM_OUT_SCALE,
   MIN_VIEWBOX_WIDTH,
@@ -53,6 +51,9 @@ export function useViewportControls(contentBounds, svgRef) {
   const svgRectRef = useRef(/** @type {DOMRect | null} */ (null));
   const pendingPanRef = useRef({ dx: 0, dy: 0 });
   const wheelCommitTimerRef = useRef(/** @type {any} */ (null));
+  // Accumulated wheel zoom for the current frame (factor multiplies, anchor is
+  // the latest cursor position).
+  const pendingWheelRef = useRef({ factor: 1, svgX: 0, svgY: 0 });
 
   // Keep ref synced with state
   useEffect(() => {
@@ -122,36 +123,55 @@ export function useViewportControls(contentBounds, svgRef) {
       if (svgCTM) {
         const { x: svgX, y: svgY } = pt.matrixTransform(svgCTM.inverse());
 
-        const scale = e.deltaY > 0 ? ZOOM_WHEEL_SCALE_IN : ZOOM_WHEEL_SCALE_OUT;
+        // Smooth, magnitude-proportional zoom. The previous code applied a fixed
+        // ~1.1x step PER wheel event regardless of how much the user scrolled —
+        // so trackpads / hi-res mice (which fire many small-delta events) zoomed
+        // abruptly, often all the way to the clamp. Derive the factor from the
+        // (delta-mode-normalised) scroll amount so a small scroll = a small zoom.
+        let dy = e.deltaY;
+        if (e.deltaMode === 1) dy *= 16; // lines -> px
+        else if (e.deltaMode === 2) dy *= window.innerHeight || 800; // pages -> px
+        // deltaY > 0 (scroll down) zooms out (factor > 1); clamp a single event
+        // so an outlier delta can't jump.
+        let factor = Math.exp(dy * 0.0015);
+        factor = Math.max(0.85, Math.min(1.18, factor));
+
+        // Accumulate across events in this frame; anchor at the latest cursor.
+        pendingWheelRef.current.factor *= factor;
+        pendingWheelRef.current.svgX = svgX;
+        pendingWheelRef.current.svgY = svgY;
 
         // R8: zoom imperatively against the live viewBox ref (no per-event React
-        // render), then debounce a single setViewBox commit once the wheel
-        // settles so the cull / LOD recompute happens once, not per tick.
-        if (panAnimationFrameRef.current) {
-          cancelAnimationFrame(panAnimationFrameRef.current);
-        }
-        panAnimationFrameRef.current = requestAnimationFrame(() => {
-          panAnimationFrameRef.current = null;
-          const prev = viewBoxRef.current;
-          const newWidth = prev.width * scale;
+        // render); commit once (debounced) so the cull / LOD recompute runs once.
+        if (panAnimationFrameRef.current == null) {
+          panAnimationFrameRef.current = requestAnimationFrame(() => {
+            panAnimationFrameRef.current = null;
+            const f = pendingWheelRef.current.factor;
+            const ax = pendingWheelRef.current.svgX;
+            const ay = pendingWheelRef.current.svgY;
+            pendingWheelRef.current.factor = 1;
 
-          const minWidth = MIN_VIEWBOX_WIDTH;
-          const maxWidth = MAX_VIEWBOX_WIDTH;
-          const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
-          const clampedHeight = clampedWidth * screenAspectRatio;
-          const actualScale = clampedWidth / prev.width;
+            const prev = viewBoxRef.current;
+            const newWidth = prev.width * f;
+            const clampedWidth = Math.max(
+              MIN_VIEWBOX_WIDTH,
+              Math.min(MAX_VIEWBOX_WIDTH, newWidth),
+            );
+            const clampedHeight = clampedWidth * screenAspectRatio;
+            const actualScale = clampedWidth / prev.width;
 
-          const newX = prev.x + (svgX - prev.x) * (1 - actualScale);
-          const newY = prev.y + (svgY - prev.y) * (1 - actualScale);
+            const newX = prev.x + (ax - prev.x) * (1 - actualScale);
+            const newY = prev.y + (ay - prev.y) * (1 - actualScale);
 
-          applyViewBoxImperative({
-            ...prev,
-            x: newX,
-            y: newY,
-            width: clampedWidth,
-            height: clampedHeight,
+            applyViewBoxImperative({
+              ...prev,
+              x: newX,
+              y: newY,
+              width: clampedWidth,
+              height: clampedHeight,
+            });
           });
-        });
+        }
 
         if (wheelCommitTimerRef.current) {
           clearTimeout(wheelCommitTimerRef.current);

@@ -34,6 +34,7 @@ function viewToScreen(vb, W, H) {
 export function SeatCanvas({
   seatMap,
   spatialIndex,
+  svgRef,
   viewBox,
   viewBoxRef,
   isDragging,
@@ -171,23 +172,24 @@ export function SeatCanvas({
     };
   }, [draw]);
 
-  // During an active drag, the React viewBox is frozen (R8); redraw every frame
-  // from the live viewBoxRef so the canvas tracks the gesture.
+  // The viewBox is driven imperatively during gestures (R8): pan/zoom write the
+  // <svg> viewBox attribute (via useViewportControls / page useLayoutEffect)
+  // without a React state change. Observe that attribute so the canvas redraws
+  // in lockstep with drag AND wheel-zoom AND programmatic zoom — not only on the
+  // debounced state commit (which would make canvas zoom lag/jump).
   useEffect(() => {
-    if (!isDragging) return;
-    let active = true;
-    let id;
-    const loop = () => {
-      if (!active) return;
-      drawRef.current();
-      id = requestAnimationFrame(loop);
-    };
-    id = requestAnimationFrame(loop);
-    return () => {
-      active = false;
-      if (id) cancelAnimationFrame(id);
-    };
-  }, [isDragging]);
+    const svg = svgRef && svgRef.current;
+    if (!svg || typeof MutationObserver === "undefined") return;
+    const obs = new MutationObserver(() => {
+      if (rafRef.current != null) return;
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        drawRef.current();
+      });
+    });
+    obs.observe(svg, { attributes: true, attributeFilter: ["viewBox"] });
+    return () => obs.disconnect();
+  }, [svgRef]);
 
   // Redraw on container resize.
   useEffect(() => {

@@ -1604,6 +1604,7 @@ const SeatLayout = () => {
           <SeatCanvas
             seatMap={seatMap}
             spatialIndex={spatialIndex}
+            svgRef={svgRef}
             viewBox={viewBox}
             viewBoxRef={viewBoxRef}
             isDragging={isDragging}
