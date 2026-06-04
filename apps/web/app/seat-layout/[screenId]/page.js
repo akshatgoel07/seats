@@ -20,6 +20,8 @@ import {
   TextElement,
   ImageElement,
 } from "../components/svg-elements";
+import { SeatCanvas } from "../components/SeatCanvas";
+import { buildSeatSpatialIndex } from "../utils/spatialIndex.js";
 import { useSeatLayout } from "../hooks/useSeatLayout";
 import { useSeatSelection } from "../hooks/useSeatSelection";
 import { useViewportControls } from "../hooks/useViewportControls";
@@ -135,6 +137,18 @@ const SeatLayout = () => {
     const seatScreenPx = (20 * window.innerWidth) / viewBox.width;
     return seatScreenPx < 9;
   }, [showSectionBoundaryInRenderer, viewBox.width]);
+
+  // R18 / 10k-seat support: above ~1,500 seats the per-seat SVG DOM doesn't
+  // scale, so render seats on a single <canvas>. Auto-selected by seat count;
+  // override with ?engine=canvas or ?engine=svg.
+  const engineParam = searchParams.get("engine");
+  const seatCount = useMemo(() => Object.keys(seatMap).length, [seatMap]);
+  const useCanvasRenderer =
+    engineParam === "canvas" || (engineParam !== "svg" && seatCount > 1500);
+  const spatialIndex = useMemo(
+    () => (useCanvasRenderer ? buildSeatSpatialIndex(seatMap) : null),
+    [useCanvasRenderer, seatMap],
+  );
 
   // Use custom hook  // Seat selection state
   // Using viewBoxRef for event handlers to prevent re-renders, but updating viewBox state for rendering
@@ -399,7 +413,8 @@ const SeatLayout = () => {
   // seats. It only rebuilds when the visible set, selection, legend filter, or a
   // handler actually changes — NOT on hoveredSeat.
   const seatElements = useMemo(() => {
-    if (!RENDER_SEATS) return null;
+    // Skip building per-seat SVG nodes entirely when the canvas renderer is active.
+    if (!RENDER_SEATS || useCanvasRenderer) return null;
     return visibleSeats.map(([seatId, seat]) => {
       const selected = isSeatSelected(seatId);
       return (
@@ -421,6 +436,7 @@ const SeatLayout = () => {
       );
     });
   }, [
+    useCanvasRenderer,
     visibleSeats,
     isSeatSelected,
     getSeatColor,
@@ -1580,6 +1596,35 @@ const SeatLayout = () => {
                 );
               })}
         </svg>
+
+        {/* R18: canvas seat layer for large layouts (overlays the SVG, which
+            keeps drawing boundaries/sections). Active only when not in the LOD
+            overview; handles pan/zoom + seat hit-testing itself. */}
+        {useCanvasRenderer && !isLODActive && (
+          <SeatCanvas
+            seatMap={seatMap}
+            spatialIndex={spatialIndex}
+            viewBox={viewBox}
+            viewBoxRef={viewBoxRef}
+            isDragging={isDragging}
+            getSeatColor={getSeatColor}
+            getDarkenedSeatColor={getDarkenedSeatColor}
+            isSeatSelected={isSeatSelected}
+            hoveredSeatId={hoveredSeat?.sl_id ?? null}
+            selectedLegendType={selectedLegendType}
+            onSeatClick={handleSeatClick}
+            onHoverSeat={(info) =>
+              info ? handleMouseEnter(info.seat) : handleMouseLeave()
+            }
+            onViewportMouseDown={handleMouseDown}
+            onViewportMouseMove={handleMouseMove}
+            onViewportMouseUp={handleMouseUp}
+            onViewportWheel={handleWheel}
+            onViewportTouchStart={handleTouchStart}
+            onViewportTouchMove={handleTouchMove}
+            onViewportTouchEnd={handleTouchEnd}
+          />
+        )}
         {/* HTML Tooltip Overlay - Centered below the seat with pointer on top */}
         {SHOW_TOOLTIP && tooltipSeat && (
           <div
