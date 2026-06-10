@@ -2,12 +2,13 @@
   "name": "opear-house",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "test": "node --test --import ./app/test-setup.js \"app/**/*.test.js\"",
-    "typecheck": "tsc --noEmit -p jsconfig.json",
+    "test": "node --test --import ./app/test-setup.ts \"app/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint .",
     "doctor": "npx react-doctor@latest"
   },
