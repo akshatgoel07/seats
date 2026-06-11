@@ -9,15 +9,28 @@
  * Pure module (positions are world coordinates from seatMap[seat].position).
  */
 
+import type { SeatSpatialIndex } from "../types.ts";
+
 const DEFAULT_CELL_SIZE = 60;
+
+type IndexedSeatMap = Record<
+  string,
+  {
+    position?: { x: number; y: number };
+    dimensions?: { width?: number; height?: number };
+  }
+>;
 
 /**
  * @param {Record<string, any>} seatMap
  * @param {number} [cellSize]
  * @returns {{ cellSize: number, cells: Map<string, string[]> }}
  */
-export function buildSeatSpatialIndex(seatMap, cellSize = DEFAULT_CELL_SIZE) {
-  const cells = new Map();
+export function buildSeatSpatialIndex(
+  seatMap: IndexedSeatMap,
+  cellSize = DEFAULT_CELL_SIZE,
+): SeatSpatialIndex {
+  const cells = new Map<string, string[]>();
   for (const [seatId, seat] of Object.entries(seatMap || {})) {
     const pos = seat && seat.position;
     if (!pos) continue;
@@ -45,12 +58,18 @@ export function buildSeatSpatialIndex(seatMap, cellSize = DEFAULT_CELL_SIZE) {
  * @param {number} [sizeFactor] - matches the renderer's seat shrink factor
  * @returns {string | null}
  */
-export function querySeatAtPoint(index, seatMap, worldX, worldY, sizeFactor = 0.88) {
+export function querySeatAtPoint(
+  index: SeatSpatialIndex | null | undefined,
+  seatMap: IndexedSeatMap,
+  worldX: number,
+  worldY: number,
+  sizeFactor = 0.88,
+): string | null {
   if (!index) return null;
   const { cellSize, cells } = index;
   const baseCx = Math.floor(worldX / cellSize);
   const baseCy = Math.floor(worldY / cellSize);
-  let best = null;
+  let best: string | null = null;
   let bestDist = Infinity;
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {

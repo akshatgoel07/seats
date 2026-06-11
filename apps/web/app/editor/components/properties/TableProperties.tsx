@@ -6,6 +6,21 @@ import {
   ColorPicker,
 } from "./UIComponents.tsx";
 import { Lock, Unlock } from "lucide-react";
+import type { EditorCategory, EditorElement, EditorSeat } from "../../types.ts";
+
+type LooseTable = EditorElement & Record<string, any>;
+type TablePropertiesProps = {
+  table: LooseTable;
+  seats: EditorSeat[];
+  categories: EditorCategory[];
+  onTableUpdate: (id: string, updates: Record<string, unknown>) => void;
+  onSeatsUpdate: (ids: string[], updates: Record<string, unknown>) => void;
+  onUpdateTableGroup: (
+    table: LooseTable,
+    oldSeats: EditorSeat[],
+    config: Record<string, unknown>,
+  ) => void;
+};
 
 export const TableProperties = ({
   table,
@@ -14,7 +29,7 @@ export const TableProperties = ({
   onTableUpdate,
   onSeatsUpdate,
   onUpdateTableGroup,
-}) => {
+}: TablePropertiesProps) => {
   // Calculate current properties from table and seats
   const currentSeatCount = seats.length;
   const currentTableRadius = table.radius || 30;
@@ -74,7 +89,7 @@ export const TableProperties = ({
         type="number"
         value={currentSeatCount}
         onChange={(value) => {
-          const newSeatCount = Math.max(2, Math.min(20, parseInt(value) || 10));
+          const newSeatCount = Math.max(2, Math.min(20, parseInt(String(value)) || 10));
           onUpdateTableGroup(table, seats, {
             seatCount: newSeatCount,
             tableRadius: currentTableRadius,
@@ -97,7 +112,7 @@ export const TableProperties = ({
             min="10"
             max="100"
             value={Math.round(currentTableRadius)}
-            onClick={(e) => /** @type {HTMLInputElement} */ (e.target).select()}
+            onClick={(e) => e.currentTarget.select()}
             onChange={(e) => {
               const newTableRadius = Math.max(
                 10,
@@ -140,7 +155,7 @@ export const TableProperties = ({
         type="number"
         value={Math.round(currentSeatRadius)}
         onChange={(value) => {
-          const newSeatRadius = Math.max(20, parseInt(value) || 39);
+          const newSeatRadius = Math.max(20, parseInt(String(value)) || 39);
           let newTableRadius = currentTableRadius;
 
           if (isRadiusLocked && radiusRatio && currentTableRadius > 0) {
@@ -198,7 +213,7 @@ export const TableProperties = ({
         value={table.strokeWidth || 2}
         onChange={(value) => {
           onTableUpdate(table.id, {
-            strokeWidth: Math.max(1, Math.min(10, parseInt(value) || 2)),
+            strokeWidth: Math.max(1, Math.min(10, parseInt(String(value)) || 2)),
           });
         }}
         min="1"
@@ -211,9 +226,9 @@ export const TableProperties = ({
           type="number"
           value={Math.round(table.x)}
           onChange={(value) => {
-            const deltaX = parseInt(value) - table.x;
+            const deltaX = parseInt(String(value)) - table.x;
             // Move table
-            onTableUpdate(table.id, { x: parseInt(value) });
+            onTableUpdate(table.id, { x: parseInt(String(value)) });
             // Move all seats by the same delta
             seats.forEach((seat) => {
               onSeatsUpdate([seat.id], {
@@ -227,9 +242,9 @@ export const TableProperties = ({
           type="number"
           value={Math.round(table.y)}
           onChange={(value) => {
-            const deltaY = parseInt(value) - table.y;
+            const deltaY = parseInt(String(value)) - table.y;
             // Move table
-            onTableUpdate(table.id, { y: parseInt(value) });
+            onTableUpdate(table.id, { y: parseInt(String(value)) });
             // Move all seats by the same delta
             seats.forEach((seat) => {
               onSeatsUpdate([seat.id], {

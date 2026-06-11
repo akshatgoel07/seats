@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"encoding/json"
 	"errors"
 	"strings"
 )
@@ -46,9 +45,8 @@ func ValidateScene(raw []byte) (Scene, error) {
 	if trimmed == "" || trimmed == "null" {
 		return Scene{}, NewValidationError("scene", "must not be empty")
 	}
-	if !json.Valid(raw) {
-		return Scene{}, NewValidationError("scene", "must be valid JSON")
-	}
+	// ParseScene's json.Unmarshal already rejects malformed JSON, so a separate
+	// json.Valid pass over the whole (multi-MB) payload would be redundant.
 	s, err := ParseScene(raw)
 	if err != nil {
 		return Scene{}, NewValidationError("scene", "must match the scene shape: "+err.Error())

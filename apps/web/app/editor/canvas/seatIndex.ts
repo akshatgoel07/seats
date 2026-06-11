@@ -16,8 +16,19 @@
  * @param {Record<string, any> | any[]} seats - the scene's seats map (or array)
  * @returns {Map<string, any[]>}
  */
-export function buildSeatsByRow(seats) {
-  const seatsByRow = new Map();
+type IndexedSeat = {
+  id?: string;
+  rowId?: string | null;
+  localX: number;
+  localY: number;
+};
+
+type RowCentroid = { cx: number; cy: number; count: number };
+
+export function buildSeatsByRow(
+  seats: Record<string, IndexedSeat> | IndexedSeat[],
+): Map<string, IndexedSeat[]> {
+  const seatsByRow = new Map<string, IndexedSeat[]>();
   const list = Array.isArray(seats) ? seats : Object.values(seats);
   for (const s of list) {
     if (!s || !s.rowId) continue;
@@ -37,9 +48,9 @@ export function buildSeatsByRow(seats) {
  * @param {Map<string, any[]>} seatsByRow
  * @returns {(rowId: string) => { cx: number, cy: number, count: number }}
  */
-export function makeRowCentroidGetter(seatsByRow) {
-  const cache = new Map();
-  return function getRowCentroid(rowId) {
+export function makeRowCentroidGetter(seatsByRow: Map<string, IndexedSeat[]>) {
+  const cache = new Map<string, RowCentroid>();
+  return function getRowCentroid(rowId: string): RowCentroid {
     const cached = cache.get(rowId);
     if (cached) return cached;
     const arr = seatsByRow.get(rowId) || [];

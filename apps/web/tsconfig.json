@@ -17,9 +17,7 @@
     "isolatedModules": true,
     "noUncheckedSideEffectImports": false,
     "skipLibCheck": true,
-    "strict": false,
-    "strictNullChecks": false,
-    "noImplicitAny": false,
+    "strict": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@/*": [

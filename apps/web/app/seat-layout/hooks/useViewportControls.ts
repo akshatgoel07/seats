@@ -10,6 +10,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, startTransition } from "react";
+import type { MouseEvent, RefObject, TouchEvent, WheelEvent } from "react";
 import {
   clampViewBoxToBounds,
   getTouchDistance,
@@ -20,6 +21,7 @@ import {
   MAX_VIEWBOX_WIDTH,
   DEFAULT_VIEWBOX,
 } from "../utils/index.ts";
+import type { ContentBounds, Point, StandingSectionElement, ViewBox } from "../types.ts";
 
 /**
  * Custom hook for managing viewport controls
@@ -27,18 +29,17 @@ import {
  * @param {any} svgRef - Reference to the SVG element
  * @returns {Object} Viewport state and handlers
  */
-export function useViewportControls(contentBounds, svgRef) {
+export function useViewportControls(
+  contentBounds: ContentBounds | null,
+  svgRef: RefObject<SVGSVGElement | null>,
+) {
   const [viewBox, setViewBox] = useState(DEFAULT_VIEWBOX);
   const viewBoxRef = useRef(DEFAULT_VIEWBOX); // Ref to hold current viewBox for event handlers without triggering re-renders
   const [isDragging, setIsDragging] = useState(false);
-  const [lastPanPoint, setLastPanPoint] = useState(
-    /** @type {{ x: number, y: number } | null} */ (null),
-  );
-  const [lastTouchDistance, setLastTouchDistance] = useState(
-    /** @type {number | null} */ (null),
-  );
-  const animationFrameRef = useRef(/** @type {number | null} */ (null));
-  const panAnimationFrameRef = useRef(/** @type {number | null} */ (null));
+  const [lastPanPoint, setLastPanPoint] = useState<Point | null>(null);
+  const [lastTouchDistance, setLastTouchDistance] = useState<number | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const panAnimationFrameRef = useRef<number | null>(null);
   const hasInitialized = useRef(false);
   const [screenAspectRatio, setScreenAspectRatio] = useState(1);
 
@@ -47,10 +48,10 @@ export function useViewportControls(contentBounds, svgRef) {
   // frame. These refs hold the live gesture state; React state (viewBox) is only
   // committed once the gesture settles.
   const isDraggingRef = useRef(false);
-  const lastPanPointRef = useRef(/** @type {{ x: number, y: number } | null} */ (null));
-  const svgRectRef = useRef(/** @type {DOMRect | null} */ (null));
+  const lastPanPointRef = useRef<Point | null>(null);
+  const svgRectRef = useRef<DOMRect | null>(null);
   const pendingPanRef = useRef({ dx: 0, dy: 0 });
-  const wheelCommitTimerRef = useRef(/** @type {any} */ (null));
+  const wheelCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Accumulated wheel zoom for the current frame (factor multiplies, anchor is
   // the latest cursor position).
   const pendingWheelRef = useRef({ factor: 1, svgX: 0, svgY: 0 });
@@ -67,7 +68,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * commit the final value at gesture end.
    */
   const applyViewBoxImperative = useCallback(
-    (vb) => {
+    (vb: ViewBox) => {
       viewBoxRef.current = vb;
       const svg = svgRef.current;
       if (svg) {
@@ -104,7 +105,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * Handle mouse wheel zoom
    */
   const handleWheel = useCallback(
-    (e) => {
+    (e: WheelEvent<Element>) => {
       // e.preventDefault();
 
       const svg = svgRef.current;
@@ -188,7 +189,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * Handle mouse down for panning
    */
   const handleMouseDown = useCallback(
-    (e) => {
+    (e: MouseEvent<Element>) => {
       if (e.button === 0) {
         setIsDragging(true); // state, for the drag cursor overlay (down/up only)
         isDraggingRef.current = true;
@@ -208,7 +209,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * imperative viewBox update per animation frame — no React state per move.
    */
   const handleMouseMove = useCallback(
-    (e) => {
+    (e: MouseEvent<Element>) => {
       if (!isDraggingRef.current || !lastPanPointRef.current) return;
 
       pendingPanRef.current.dx += e.clientX - lastPanPointRef.current.x;
@@ -255,26 +256,21 @@ export function useViewportControls(contentBounds, svgRef) {
   /**
    * Handle touch start for pinch-to-zoom and panning
    */
-  const handleTouchStart = useCallback((e) => {
+  const handleTouchStart = useCallback((e: TouchEvent<Element>) => {
     if (e.touches.length === 2) {
       e.preventDefault();
       const distance = getTouchDistance(e.touches);
       setLastTouchDistance(distance);
     } else if (e.touches.length === 1) {
-      const target = e.target;
-      let currentElement = target;
+      let currentElement = e.target as Element | null;
       let isSeatElement = false;
 
       while (currentElement && currentElement !== svgRef.current) {
-        if (
-          currentElement.getAttribute &&
-          currentElement.getAttribute("data-seat-element") === "true"
-        ) {
+        if (currentElement.getAttribute("data-seat-element") === "true") {
           isSeatElement = true;
           break;
         }
-        currentElement =
-          currentElement.parentElement || currentElement.parentNode;
+        currentElement = currentElement.parentElement;
       }
 
       if (isSeatElement) {
@@ -294,7 +290,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * Handle touch move for pinch-to-zoom and panning
    */
   const handleTouchMove = useCallback(
-    (e) => {
+    (e: TouchEvent<Element>) => {
       const svg = svgRef.current;
       if (!svg) return;
 
@@ -401,21 +397,16 @@ export function useViewportControls(contentBounds, svgRef) {
   /**
    * Handle touch end to stop panning/zooming
    */
-  const handleTouchEnd = useCallback((e) => {
-    const target = e.target;
-    let currentElement = target;
+  const handleTouchEnd = useCallback((e: TouchEvent<Element>) => {
+    let currentElement = e.target as Element | null;
     let isSeatElement = false;
 
     while (currentElement && currentElement !== svgRef.current) {
-      if (
-        currentElement.getAttribute &&
-        currentElement.getAttribute("data-seat-element") === "true"
-      ) {
+      if (currentElement.getAttribute("data-seat-element") === "true") {
         isSeatElement = true;
         break;
       }
-      currentElement =
-        currentElement.parentElement || currentElement.parentNode;
+      currentElement = currentElement.parentElement;
     }
 
     if (isSeatElement) {
@@ -469,7 +460,7 @@ export function useViewportControls(contentBounds, svgRef) {
     const animationDuration = 500; // milliseconds
     const startTime = performance.now();
 
-    const animate = (currentTime) => {
+    const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / animationDuration, 1);
       const easedProgress = easeInOutCubic(progress);
@@ -539,7 +530,7 @@ export function useViewportControls(contentBounds, svgRef) {
     const animationDuration = 600; // milliseconds
     const startTime = performance.now();
 
-    const animate = (currentTime) => {
+    const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / animationDuration, 1);
       const easedProgress = easeInOutCubic(progress);
@@ -578,7 +569,7 @@ export function useViewportControls(contentBounds, svgRef) {
     }
 
     const startViewBox = { ...viewBox };
-    let targetViewBox;
+    let targetViewBox: ViewBox;
 
     if (contentBounds && screenAspectRatio > 0) {
       // Adjust viewBox to match screen aspect ratio for consistent panning
@@ -609,7 +600,7 @@ export function useViewportControls(contentBounds, svgRef) {
     const animationDuration = 400; // milliseconds
     const startTime = performance.now();
 
-    const animate = (currentTime) => {
+    const animate = (currentTime: number) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / animationDuration, 1);
       const easedProgress = easeInOutCubic(progress);
@@ -642,7 +633,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * @param {number} t - Progress value between 0 and 1
    * @returns {number} Eased value
    */
-  const easeInOutCubic = (t) => {
+  const easeInOutCubic = (t: number): number => {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   };
 
@@ -652,7 +643,7 @@ export function useViewportControls(contentBounds, svgRef) {
    * @param {number} paddingMultiplier - Multiplier for padding around element (default: 1.5)
    */
   const zoomToElement = useCallback(
-    (element, paddingMultiplier = 1.5) => {
+    (element: StandingSectionElement, paddingMultiplier = 1.5) => {
       if (!element) return;
 
       // Cancel any ongoing animation
@@ -661,7 +652,10 @@ export function useViewportControls(contentBounds, svgRef) {
         animationFrameRef.current = null;
       }
 
-      let elementCenterX, elementCenterY, scaledWidth, scaledHeight;
+      let elementCenterX: number;
+      let elementCenterY: number;
+      let scaledWidth: number;
+      let scaledHeight: number;
 
       if (
         element.pathBoundary &&
@@ -675,7 +669,7 @@ export function useViewportControls(contentBounds, svgRef) {
         let minY = Infinity;
         let maxY = -Infinity;
 
-        points.forEach((p) => {
+        points.forEach((p: Point) => {
           if (p && typeof p.x === "number" && typeof p.y === "number") {
             minX = Math.min(minX, p.x);
             maxX = Math.max(maxX, p.x);
@@ -779,7 +773,7 @@ export function useViewportControls(contentBounds, svgRef) {
       const animationDuration = 600; // milliseconds
       const startTime = performance.now();
 
-      const animate = (currentTime) => {
+      const animate = (currentTime: number) => {
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / animationDuration, 1);
         const easedProgress = easeInOutCubic(progress);

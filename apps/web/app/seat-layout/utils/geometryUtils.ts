@@ -4,6 +4,45 @@
 
 import { CONTENT_BOUNDS_PADDING } from "./constants.ts";
 
+type Point = { x: number; y: number };
+type Bounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+type ContentBounds = Bounds & {
+  width: number;
+  height: number;
+  centerX: number;
+  centerY: number;
+};
+type Rect = { x: number; y: number; width: number; height: number; rotation: number };
+type ViewBox = { x: number; y: number; width: number; height: number };
+type SeatLike = {
+  localX?: number;
+  localY?: number;
+  width?: number;
+  height?: number;
+  position?: Point;
+  dimensions?: { width?: number; height?: number };
+};
+type ElementLike = {
+  type?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  scale?: number;
+  radius?: number;
+  points?: Point[];
+};
+type CanvasSceneData = {
+  seats?: Record<string, SeatLike>;
+  elements?: Record<string, ElementLike>;
+};
+
 /**
  * Check if a point is inside a rotated rectangle
  * @param {number} pointX - X coordinate of the point
@@ -11,7 +50,11 @@ import { CONTENT_BOUNDS_PADDING } from "./constants.ts";
  * @param {Object} rect - Rectangle with x, y, width, height, rotation
  * @returns {boolean} True if point is inside the rectangle
  */
-export function isPointInRotatedRect(pointX, pointY, rect) {
+export function isPointInRotatedRect(
+  pointX: number,
+  pointY: number,
+  rect: Rect,
+): boolean {
   const { x, y, width, height, rotation } = rect;
   const halfWidth = width / 2;
   const halfHeight = height / 2;
@@ -40,7 +83,9 @@ export function isPointInRotatedRect(pointX, pointY, rect) {
  * @param {Object} seats - Object with seat IDs as keys and seat data as values
  * @returns {Object|null} Bounding box with minX, minY, maxX, maxY, or null if no seats
  */
-export function calculateSeatsBounds(seats) {
+export function calculateSeatsBounds(
+  seats: Record<string, SeatLike> | null | undefined,
+): Bounds | null {
   if (!seats || Object.keys(seats).length === 0) {
     return null;
   }
@@ -81,7 +126,9 @@ export function calculateSeatsBounds(seats) {
  * @param {Object} elements - Object with element IDs as keys and element data as values
  * @returns {Object|null} Bounding box with minX, minY, maxX, maxY, or null if no elements
  */
-export function calculateElementsBounds(elements) {
+export function calculateElementsBounds(
+  elements: Record<string, ElementLike> | null | undefined,
+): Bounds | null {
   if (!elements || Object.keys(elements).length === 0) {
     return null;
   }
@@ -105,7 +152,7 @@ export function calculateElementsBounds(elements) {
       maxY = Math.max(maxY, element.y + halfHeight);
     } else if (element.type === "path" && element.points) {
       const scale = element.scale || 1.0;
-      element.points.forEach((point) => {
+      element.points.forEach((point: Point) => {
         const scaledX = point.x * scale;
         const scaledY = point.y * scale;
         minX = Math.min(minX, scaledX);
@@ -149,7 +196,9 @@ export function calculateElementsBounds(elements) {
  * @param {Object} canvasSceneData - Canvas scene data with seats and elements
  * @returns {Object|null} Content bounds with padding, or null if no content
  */
-export function calculateContentBounds(canvasSceneData) {
+export function calculateContentBounds(
+  canvasSceneData: CanvasSceneData | null | undefined,
+): ContentBounds | null {
   if (
     !canvasSceneData ||
     !canvasSceneData.seats ||
@@ -214,7 +263,10 @@ export function calculateContentBounds(canvasSceneData) {
  * @param {Object} contentBounds - Content bounds with minX, minY, maxX, maxY, width, height
  * @returns {Object} Clamped viewBox position with x and y
  */
-export function clampViewBoxToBounds(viewBox, contentBounds) {
+export function clampViewBoxToBounds(
+  viewBox: ViewBox,
+  contentBounds: ContentBounds | null,
+): Point {
   if (!contentBounds) return { x: viewBox.x, y: viewBox.y };
 
   let newX = viewBox.x;
@@ -251,7 +303,11 @@ export function clampViewBoxToBounds(viewBox, contentBounds) {
  * @param {number} padding - Viewport padding for culling
  * @returns {boolean} True if seat is visible in viewport
  */
-export function isSeatInViewport(seat, viewBox, padding = 0) {
+export function isSeatInViewport(
+  seat: SeatLike & { position: Point },
+  viewBox: ViewBox,
+  padding = 0,
+): boolean {
   const { position, dimensions } = seat;
   const halfWidth = (dimensions?.width || 20) / 2;
   const halfHeight = (dimensions?.height || 20) / 2;

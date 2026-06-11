@@ -4,8 +4,14 @@
  */
 
 import React from "react";
+import type { RendererElement } from "../../types.ts";
 
-export function RectangleElement({ element, elementId }) {
+type ElementProps = {
+  element: RendererElement;
+  elementId: string;
+};
+
+export function RectangleElement({ element, elementId }: ElementProps) {
   const scale = element.scale || 1.0;
 
   return (

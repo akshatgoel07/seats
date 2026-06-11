@@ -1,7 +1,27 @@
 import { buildSeatsByRow, makeRowCentroidGetter } from "./seatIndex.ts";
+import type {
+  CurveHandles,
+  EditorElement,
+  EditorState,
+  Point,
+} from "../types.ts";
+
+type ElementTypes = Record<string, string>;
+type HitResult = { type: string; id: string; rowId?: string | null };
+type PathSegmentHit = {
+  segmentIndex: number;
+  endpoint: "start" | "end";
+  pointIndex: number;
+};
 
 // Helper function to calculate a point on a cubic Bezier curve
-function getBezierPoint(p0, p1, p2, p3, t) {
+function getBezierPoint(
+  p0: Point,
+  p1: Point,
+  p2: Point,
+  p3: Point,
+  t: number,
+): Point {
   const u = 1 - t;
   const u2 = u * u;
   const u3 = u2 * u;
@@ -15,7 +35,15 @@ function getBezierPoint(p0, p1, p2, p3, t) {
 }
 
 // Helper function to perform hit testing on a cubic Bezier curve
-function hitTestBezierCurve(p0, cp1, cp2, p3, testX, testY, tolerance) {
+function hitTestBezierCurve(
+  p0: Point,
+  cp1: Point,
+  cp2: Point,
+  p3: Point,
+  testX: number,
+  testY: number,
+  tolerance: number,
+): boolean {
   // Sample points along the curve (more samples = better accuracy but slower performance)
   const samples = 20;
 
@@ -37,7 +65,12 @@ function hitTestBezierCurve(p0, cp1, cp2, p3, testX, testY, tolerance) {
 }
 
 // Helper function to check if a point is inside a closed path using ray casting algorithm
-function isPointInsideClosedPath(testX, testY, points, curveHandles) {
+function isPointInsideClosedPath(
+  testX: number,
+  testY: number,
+  points: Point[] | undefined,
+  curveHandles?: CurveHandles,
+): boolean {
   if (!points || points.length < 3) return false;
 
   let intersections = 0;
@@ -45,7 +78,7 @@ function isPointInsideClosedPath(testX, testY, points, curveHandles) {
   // For paths with curve handles, we need to sample points along the curves
   if (curveHandles && Object.keys(curveHandles).length > 0) {
     // Sample points along each segment to create a polygon approximation
-    const sampledPoints = [];
+    const sampledPoints: Point[] = [];
 
     for (let i = 0; i < points.length; i++) {
       const segmentHandles = curveHandles[i];
@@ -109,7 +142,12 @@ function isPointInsideClosedPath(testX, testY, points, curveHandles) {
 }
 
 // Separate function to prioritize boundary (PATH) and section boundary elements for easier selection
-export function hitTestBoundary(worldX, worldY, state, ELEMENT_TYPES) {
+export function hitTestBoundary(
+  worldX: number,
+  worldY: number,
+  state: EditorState,
+  ELEMENT_TYPES: ElementTypes,
+): HitResult | null {
   const { elements } = state.scene;
 
   // Check PATH and SECTION_BOUNDARY elements first (boundaries)
@@ -131,9 +169,11 @@ export function hitTestBoundary(worldX, worldY, state, ELEMENT_TYPES) {
     if (scale !== 1.0) {
       // Calculate center point of the element
       const centerX =
-        element.points.reduce((sum, p) => sum + p.x, 0) / element.points.length;
+        element.points.reduce((sum: number, p: Point) => sum + p.x, 0) /
+        element.points.length;
       const centerY =
-        element.points.reduce((sum, p) => sum + p.y, 0) / element.points.length;
+        element.points.reduce((sum: number, p: Point) => sum + p.y, 0) /
+        element.points.length;
 
       // Reverse the scaling transformation
       adjustedWorldX = centerX + (worldX - centerX) / scale;
@@ -230,7 +270,12 @@ export function hitTestBoundary(worldX, worldY, state, ELEMENT_TYPES) {
   return null;
 }
 
-export function hitTestElement(worldX, worldY, state, ELEMENT_TYPES) {
+export function hitTestElement(
+  worldX: number,
+  worldY: number,
+  state: EditorState,
+  ELEMENT_TYPES: ElementTypes,
+): HitResult | null {
   const { elements } = state.scene;
   const nonImageElements = Object.values(elements).filter(
     (element) => element.type !== ELEMENT_TYPES.IMAGE,
@@ -307,10 +352,16 @@ export function hitTestElement(worldX, worldY, state, ELEMENT_TYPES) {
         if (scale !== 1.0) {
           // Calculate center point of the path boundary
           const pathCenterX =
-            element.pathBoundary.points.reduce((sum, p) => sum + p.x, 0) /
+            element.pathBoundary.points.reduce(
+              (sum: number, p: Point) => sum + p.x,
+              0,
+            ) /
             element.pathBoundary.points.length;
           const pathCenterY =
-            element.pathBoundary.points.reduce((sum, p) => sum + p.y, 0) /
+            element.pathBoundary.points.reduce(
+              (sum: number, p: Point) => sum + p.y,
+              0,
+            ) /
             element.pathBoundary.points.length;
 
           // Reverse the scaling transformation for path
@@ -392,10 +443,10 @@ export function hitTestElement(worldX, worldY, state, ELEMENT_TYPES) {
       if (scale !== 1.0) {
         // Calculate center point of the path
         const pathCenterX =
-          element.points.reduce((sum, p) => sum + p.x, 0) /
+          element.points.reduce((sum: number, p: Point) => sum + p.x, 0) /
           element.points.length;
         const pathCenterY =
-          element.points.reduce((sum, p) => sum + p.y, 0) /
+          element.points.reduce((sum: number, p: Point) => sum + p.y, 0) /
           element.points.length;
 
         // Reverse the scaling transformation for path
@@ -603,12 +654,16 @@ export function hitTestElement(worldX, worldY, state, ELEMENT_TYPES) {
   return null;
 }
 
-export function hitTestSeat(worldX, worldY, state) {
+export function hitTestSeat(
+  worldX: number,
+  worldY: number,
+  state: EditorState,
+): HitResult | null {
   const { seats, rows, sections } = state.scene;
   // Index seats by row once so rotated-row pivots are O(1) (was O(seats^2)).
   const seatsByRow = buildSeatsByRow(seats);
   const getRowCentroid = makeRowCentroidGetter(seatsByRow);
-  let closestSeat = null;
+  let closestSeat: HitResult | null = null;
   let closestDistance = Infinity;
   for (const seat of Object.values(seats)) {
     if (!seat.rowId) {
@@ -678,7 +733,11 @@ export function hitTestSeat(worldX, worldY, state) {
   return closestSeat;
 }
 
-export function hitTestRow(worldX, worldY, state) {
+export function hitTestRow(
+  worldX: number,
+  worldY: number,
+  state: EditorState,
+): HitResult | null {
   const { rows, sections } = state.scene;
   const tolerance = 10 / state.scene.view.scale;
   for (const row of Object.values(rows)) {
@@ -749,7 +808,12 @@ export function hitTestRow(worldX, worldY, state) {
   return null;
 }
 
-export function hitTestPathSegment(worldX, worldY, element, tolerance = 10) {
+export function hitTestPathSegment(
+  worldX: number,
+  worldY: number,
+  element: EditorElement | null | undefined,
+  tolerance = 10,
+): PathSegmentHit | null {
   if (!element || !element.points || element.points.length < 2) {
     return null;
   }
@@ -834,7 +898,13 @@ export function hitTestPathSegment(worldX, worldY, element, tolerance = 10) {
   return null;
 }
 
-export function getItemsInRect(startX, startY, endX, endY, state) {
+export function getItemsInRect(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  state: EditorState,
+): string[] {
   const { seats, rows, sections, elements } = state.scene;
   // Index seats by row once so rotated-row pivots are O(1) (was O(seats^2)).
   const seatsByRow = buildSeatsByRow(seats);
@@ -843,8 +913,8 @@ export function getItemsInRect(startX, startY, endX, endY, state) {
   const maxX = Math.max(startX, endX);
   const minY = Math.min(startY, endY);
   const maxY = Math.max(startY, endY);
-  const selectedSeats = [];
-  const selectedElements = [];
+  const selectedSeats: string[] = [];
+  const selectedElements: string[] = [];
   Object.values(elements).forEach((element) => {
     // Only include elements that are not locked images in rectangle selection
     if (element.type === "image" && element.locked) {

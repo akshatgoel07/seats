@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: seatlayout
+          POSTGRES_PASSWORD: seatlayout
+          POSTGRES_DB: seatlayout
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U seatlayout -d seatlayout"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://seatlayout:seatlayout@localhost:5432/seatlayout?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+          cache-dependency-path: apps/api/go.sum
+      - name: Vet
+        run: go vet ./...
+      - name: Build
+        run: go build ./...
+      - name: Unit tests
+        run: go test ./...
+      - name: Migrate
+        run: go run ./cmd/migrate
+      - name: Integration tests
+        run: go test -tags=integration ./...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Lint
+        run: pnpm lint
+      - name: Tests
+        run: pnpm test
+      - name: Build
+        run: pnpm build

@@ -133,12 +133,32 @@ func (s *LayoutService) DeleteLayout(ctx context.Context, id string) error {
 }
 
 func (s *LayoutService) ListSeats(ctx context.Context, layoutID string) ([]domain.FlatSeat, error) {
-	// Confirm the layout exists for a clear 404.
-	if _, err := s.layouts.GetLayout(ctx, layoutID); err != nil {
+	// Confirm the layout exists for a clear 404 — EXISTS avoids reading the scene.
+	if ok, err := s.layouts.Exists(ctx, layoutID); err != nil {
 		return nil, mapError(err)
+	} else if !ok {
+		return nil, mapError(store.ErrNotFound)
 	}
 	seats, err := s.layouts.ListSeats(ctx, layoutID)
 	return seats, mapError(err)
+}
+
+// ListSeatsJSON returns the flat seats pre-serialized by Postgres (json_agg),
+// skipping per-row Scan + Go marshal on the hot read path.
+func (s *LayoutService) ListSeatsJSON(ctx context.Context, layoutID string) (json.RawMessage, error) {
+	if ok, err := s.layouts.Exists(ctx, layoutID); err != nil {
+		return nil, mapError(err)
+	} else if !ok {
+		return nil, mapError(store.ErrNotFound)
+	}
+	raw, err := s.layouts.ListSeatsJSON(ctx, layoutID)
+	return raw, mapError(err)
+}
+
+// LayoutVersion returns the layout's version (cache validator) without the scene.
+func (s *LayoutService) LayoutVersion(ctx context.Context, id string) (int, error) {
+	v, err := s.layouts.GetVersion(ctx, id)
+	return v, mapError(err)
 }
 
 func (s *LayoutService) Publish(ctx context.Context, id string) (domain.Layout, error) {

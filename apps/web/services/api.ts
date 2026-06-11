@@ -8,172 +8,354 @@
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8080";
 
-type RequestOptions = {
-  method?: string;
-  body?: any;
-  raw?: boolean;
-  headers?: Record<string, string>;
+export type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [key: string]: JSONValue };
+
+export type JSONObject = { [key: string]: JSONValue };
+
+export interface ApiEnvelope<T> {
+  data: T;
+  meta?: unknown;
+}
+
+export interface ApiErrorBody {
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+type APIClientError = Error & {
+  status?: number;
+  code?: string;
 };
 
-/**
- * @param {string} path
- * @param {{ method?: string, body?: any, raw?: boolean, headers?: Record<string, string> }} [options]
- * @returns {Promise<any>}
- */
-async function request(
+type RequestOptions = {
+  method?: string;
+  body?: unknown;
+  raw?: boolean;
+};
+
+export interface PaginationOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface Venue {
+  id: string;
+  name: string;
+  metadata?: JSONObject;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Category {
+  id: string;
+  venueId: string;
+  name: string;
+  color: string;
+  priceCents: number;
+  isStanding: boolean;
+  externalRef?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SceneCategory {
+  id: string;
+  name: string;
+  color: string;
+  price: number;
+  screen_seat_type_id?: number;
+  is_open_seating_area?: string;
+  sst_no_of_seats?: number;
+}
+
+export interface SceneVenue {
+  id: string;
+  name: string;
+  sections: string[];
+  categories: SceneCategory[];
+}
+
+export interface Scene {
+  venue: SceneVenue;
+  sections: Record<string, unknown>;
+  rows: Record<string, unknown>;
+  seats: Record<string, unknown>;
+  elements: Record<string, unknown>;
+  view?: unknown;
+  showSectionBoundaryInRenderer?: boolean;
+}
+
+export interface Layout {
+  id: string;
+  venueId: string;
+  name: string;
+  status: string;
+  scene: Scene;
+  rowCount: number;
+  colCount: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FlatSeat {
+  seatUid: string;
+  label: string;
+  rowLabel: string;
+  rowNum: number;
+  colNum: number;
+  categoryId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isStanding: boolean;
+  standingSectionId?: string;
+}
+
+export interface Show {
+  id: string;
+  layoutId: string;
+  name: string;
+  startsAt?: string;
+  status: string;
+  externalRef?: string;
+  createdAt: string;
+}
+
+export interface SeatStatus {
+  seatUid: string;
+  state: number;
+  reserveType: number;
+  priceCents: number;
+  holdId?: string;
+  bookingId?: string;
+}
+
+export interface Hold {
+  id: string;
+  showId: string;
+  status: string;
+  seatUids: string[];
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface Booking {
+  id: string;
+  showId: string;
+  holdId?: string;
+  status: string;
+  seatUids: string[];
+  customer?: JSONObject;
+  createdAt: string;
+}
+
+export interface ShowSeatsPayload {
+  show: Show;
+  scene: Scene;
+  seats: FlatSeat[];
+  status: SeatStatus[];
+}
+
+export interface LayoutMetaUpdate {
+  name?: string;
+  status?: string;
+}
+
+export interface CreateShowInput {
+  name?: string;
+  startsAt?: string;
+  status?: string;
+  externalRef?: string;
+}
+
+export interface SeatStateUpdate {
+  seatUid: string;
+  state?: number;
+  reserveType?: number;
+  priceCents?: number;
+}
+
+export interface BookingInput {
+  holdId?: string;
+  seatUids?: string[];
+  customer?: JSONObject;
+}
+
+async function request<T>(
   path: string,
   { method = "GET", body, raw = false }: RequestOptions = {},
-) {
-  const opts: {
-    method: string;
-    headers: Record<string, string>;
-    body?: any;
-  } = {
+): Promise<T> {
+  const opts: RequestInit = {
     method,
     headers: { "Content-Type": "application/json" },
   };
   if (body !== undefined) {
-    opts.body = raw ? body : JSON.stringify(body);
+    opts.body = raw ? (body as BodyInit) : JSON.stringify(body);
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, opts);
 
-  // 204 No Content
-  if (res.status === 204) return null;
+  if (res.status === 204) return null as T;
 
-  let payload: any = null;
+  let payload: ApiEnvelope<T> | ApiErrorBody | null = null;
   const text = await res.text();
   if (text) {
     try {
-      payload = JSON.parse(text);
+      payload = JSON.parse(text) as ApiEnvelope<T> | ApiErrorBody;
     } catch {
       payload = null;
     }
   }
 
   if (!res.ok) {
-    const msg =
-      payload?.error?.message || `HTTP ${res.status} for ${method} ${path}`;
-    const err = new Error(msg) as Error & { status?: number; code?: any };
+    const apiError = payload && "error" in payload ? payload.error : null;
+    const msg = apiError?.message || `HTTP ${res.status} for ${method} ${path}`;
+    const err = new Error(msg) as APIClientError;
     err.status = res.status;
-    err.code = payload?.error?.code;
+    err.code = apiError?.code;
     throw err;
   }
 
-  return payload ? payload.data : null;
+  return payload && "data" in payload ? payload.data : (null as T);
 }
 
 export class ApiService {
-  // ---- Venues ----
-  static listVenues({ limit = 50, offset = 0 } = {}) {
+  static listVenues({
+    limit = 50,
+    offset = 0,
+  }: PaginationOptions = {}): Promise<Venue[]> {
     return request(`/v1/venues?limit=${limit}&offset=${offset}`);
   }
-  static createVenue(name, metadata) {
+
+  static createVenue(
+    name: string,
+    metadata?: JSONObject,
+  ): Promise<Venue> {
     return request(`/v1/venues`, { method: "POST", body: { name, metadata } });
   }
-  static getVenue(venueId) {
+
+  static getVenue(venueId: string): Promise<Venue> {
     return request(`/v1/venues/${venueId}`);
   }
 
-  // ---- Categories ----
-  static listCategories(venueId) {
+  static listCategories(venueId: string): Promise<Category[]> {
     return request(`/v1/venues/${venueId}/categories`);
   }
 
-  // ---- Layouts ----
-  static listLayouts(venueId, { limit = 50, offset = 0 } = {}) {
+  static listLayouts(
+    venueId: string,
+    { limit = 50, offset = 0 }: PaginationOptions = {},
+  ): Promise<Layout[]> {
     return request(
       `/v1/venues/${venueId}/layouts?limit=${limit}&offset=${offset}`,
     );
   }
-  static createLayout(venueId, name) {
+
+  static createLayout(venueId: string, name: string): Promise<Layout> {
     return request(`/v1/venues/${venueId}/layouts`, {
       method: "POST",
       body: { name },
     });
   }
-  // Returns the full layout record, including `scene` (the editor document).
-  static getLayout(layoutId) {
+
+  static getLayout(layoutId: string): Promise<Layout> {
     return request(`/v1/layouts/${layoutId}`);
   }
-  // Persists the editor scene. The backend flattens seats server-side.
-  static saveLayout(layoutId, scene) {
+
+  static saveLayout(layoutId: string, scene: unknown): Promise<Layout> {
     return request(`/v1/layouts/${layoutId}`, {
       method: "PUT",
       raw: true,
       body: JSON.stringify(scene),
     });
   }
-  /**
-   * @param {string} layoutId
-   * @param {{ name?: string, status?: string }} [meta]
-   */
-  static updateLayoutMeta(layoutId, { name, status }: any = {}) {
+
+  static updateLayoutMeta(
+    layoutId: string,
+    { name, status }: LayoutMetaUpdate = {},
+  ): Promise<Layout> {
     return request(`/v1/layouts/${layoutId}`, {
       method: "PATCH",
       body: { name, status },
     });
   }
-  static publishLayout(layoutId) {
+
+  static publishLayout(layoutId: string): Promise<Layout> {
     return request(`/v1/layouts/${layoutId}/publish`, { method: "POST" });
   }
-  // Derived flat seat list (no scene parsing needed) — handy for integrations.
-  static getLayoutSeats(layoutId) {
+
+  static getLayoutSeats(layoutId: string): Promise<FlatSeat[]> {
     return request(`/v1/layouts/${layoutId}/seats`);
   }
 
-  // ---- Shows (per-instance availability) ----
-  static listShows(layoutId) {
+  static listShows(layoutId: string): Promise<Show[]> {
     return request(`/v1/layouts/${layoutId}/shows`);
   }
-  /**
-   * @param {string} layoutId
-   * @param {{ name?: string, startsAt?: string, status?: string, externalRef?: string }} [show]
-   */
+
   static createShow(
-    layoutId,
-    { name, startsAt, status, externalRef }: any = {},
-  ) {
+    layoutId: string,
+    { name, startsAt, status, externalRef }: CreateShowInput = {},
+  ): Promise<Show> {
     return request(`/v1/layouts/${layoutId}/shows`, {
       method: "POST",
       body: { name, startsAt, status, externalRef },
     });
   }
-  static getShow(showId) {
+
+  static getShow(showId: string): Promise<Show> {
     return request(`/v1/shows/${showId}`);
   }
-  // The customer-render payload: { show, scene, seats[], status[] }.
-  static getShowSeats(showId) {
+
+  static getShowSeats(showId: string): Promise<ShowSeatsPayload> {
     return request(`/v1/shows/${showId}/seats`);
   }
-  static patchShowSeats(showId, updates) {
+
+  static patchShowSeats(
+    showId: string,
+    updates: SeatStateUpdate[],
+  ): Promise<{ updated: number }> {
     return request(`/v1/shows/${showId}/seats`, {
       method: "PATCH",
       body: { updates },
     });
   }
 
-  // ---- Holds & Bookings ----
-  static createHold(showId, seatUids, ttlSeconds) {
+  static createHold(
+    showId: string,
+    seatUids: string[],
+    ttlSeconds?: number,
+  ): Promise<Hold> {
     return request(`/v1/shows/${showId}/holds`, {
       method: "POST",
       body: { seatUids, ttlSeconds },
     });
   }
-  static releaseHold(holdId) {
+
+  static releaseHold(holdId: string): Promise<null> {
     return request(`/v1/holds/${holdId}`, { method: "DELETE" });
   }
-  /**
-   * @param {string} showId
-   * @param {{ holdId?: string, seatUids?: string[], customer?: any }} [booking]
-   */
-  static createBooking(showId, { holdId, seatUids, customer }: any = {}) {
+
+  static createBooking(
+    showId: string,
+    { holdId, seatUids, customer }: BookingInput = {},
+  ): Promise<Booking> {
     return request(`/v1/shows/${showId}/bookings`, {
       method: "POST",
       body: { holdId, seatUids, customer },
     });
   }
-  static getBooking(bookingId) {
+
+  static getBooking(bookingId: string): Promise<Booking> {
     return request(`/v1/bookings/${bookingId}`);
   }
 }

@@ -35,26 +35,30 @@ func run(log *slog.Logger) error {
 
 	// Create the database handle. sql.Open connects lazily, so this does not
 	// fail on a transient outage; readiness pings it live. We probe once at
-	// startup only to log a warning and to decide whether to wire API routes
-	// now (they require a reachable DB). This keeps the server resilient to
-	// database/app startup ordering.
+	// startup only to log a warning; routes are always wired so the API recovers
+	// without a restart when the database comes up later.
 	db, err := postgres.New(cfg.DatabaseURL)
 	if err != nil {
 		return err
 	}
 	defer db.Close()
+	stores := postgres.NewStores(db)
+
+	// Sweep expired holds in the background; 10s bounds how long a lapsed hold
+	// can keep seats unavailable (default hold TTL is 300s).
+	sweepCtx, stopSweep := context.WithCancel(context.Background())
+	defer stopSweep()
+	go sweepHolds(sweepCtx, log, stores.Bookings, 10*time.Second)
 
 	mux := http.NewServeMux()
 	handler.NewHealth(db).Register(mux)
 
 	pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	dbReachable := db.PingContext(pingCtx) == nil
-	cancel()
-	if dbReachable {
-		registerAPIRoutes(mux, db, log)
-	} else {
-		log.Warn("database not reachable at startup; serving health probes only (readiness will report not-ready)")
+	if err := db.PingContext(pingCtx); err != nil {
+		log.Warn("database not reachable at startup; API will return errors until it comes up (readiness reports not-ready)", "err", err.Error())
 	}
+	cancel()
+	registerAPIRoutes(mux, stores, log)
 
 	// Fall back to a JSON 404 for unmatched routes.
 	mux.Handle("/", httpx.NotFoundHandler())

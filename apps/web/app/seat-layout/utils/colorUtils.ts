@@ -18,13 +18,27 @@ import {
  */
 const darkenColorCache = new Map();
 
+type LegacySeatRecord = {
+  sl_id?: string;
+  sl_seat_status?: string;
+  seat_reserve_type_id?: number | string | null;
+  covidBlocked?: boolean;
+  isVipReserved?: boolean;
+  sst_seat_type?: string;
+};
+
+type StandingSectionElement = {
+  fillColor?: string;
+  strokeColor?: string;
+};
+
 /**
  * Convert hex color to darker version by reducing RGB values
  * @param {string} hexColor - Hex color string (e.g., "#ff0000")
  * @param {number} factor - Darkening factor (0-1, default 0.4 = 40% darker)
  * @returns {string} Darker hex color
  */
-export function darkenColor(hexColor, factor = 0.4) {
+export function darkenColor(hexColor: string, factor = 0.4): string {
   const cacheKey = `${hexColor}|${factor}`;
   const cached = darkenColorCache.get(cacheKey);
   if (cached !== undefined) return cached;
@@ -57,7 +71,11 @@ export function darkenColor(hexColor, factor = 0.4) {
  * @param {Map} seatTypesMap - Map of seat types to their color codes
  * @returns {string} Hex color code for the seat
  */
-export function getSeatColor(seat, isSelected, seatTypesMap) {
+export function getSeatColor(
+  seat: LegacySeatRecord,
+  isSelected: boolean,
+  seatTypesMap: Map<string, string>,
+): string {
   const isBlockedByReserveType =
     seat.seat_reserve_type_id === 8 ||
     seat.seat_reserve_type_id === 12 ||
@@ -70,7 +88,7 @@ export function getSeatColor(seat, isSelected, seatTypesMap) {
   if (isBlockedByReserveType) return COLOR_BLOCKED;
   if (isSelected) return COLOR_SELECTED;
 
-  return seatTypesMap.get(seat.sst_seat_type) || COLOR_DEFAULT;
+  return seatTypesMap.get(seat.sst_seat_type || "") || COLOR_DEFAULT;
 }
 
 /**
@@ -80,8 +98,12 @@ export function getSeatColor(seat, isSelected, seatTypesMap) {
  * @param {Map} seatTypesMap - Map of seat types to their color codes
  * @returns {Map} Map of seat IDs to color codes
  */
-export function buildSeatColorsMap(seatMap, selectedSeats, seatTypesMap) {
-  const colorsMap = new Map();
+export function buildSeatColorsMap(
+  seatMap: Record<string, LegacySeatRecord>,
+  selectedSeats: Set<string>,
+  seatTypesMap: Map<string, string>,
+): Map<string, string> {
+  const colorsMap = new Map<string, string>();
 
   Object.values(seatMap).forEach((seat) => {
     const isSelected = selectedSeats.has(seat.sl_id);
@@ -98,8 +120,11 @@ export function buildSeatColorsMap(seatMap, selectedSeats, seatTypesMap) {
  * @param {number} factor - Darkening factor (0-1, default 0.4)
  * @returns {Map} Map of seat IDs to darkened color codes
  */
-export function buildDarkenColorsMap(seatColorsMap, factor = 0.4) {
-  const darkMap = new Map();
+export function buildDarkenColorsMap(
+  seatColorsMap: Map<string, string>,
+  factor = 0.4,
+): Map<string, string> {
+  const darkMap = new Map<string, string>();
 
   seatColorsMap.forEach((color, seatId) => {
     darkMap.set(seatId, darkenColor(color, factor));
@@ -114,7 +139,10 @@ export function buildDarkenColorsMap(seatColorsMap, factor = 0.4) {
  * @param {Object} element - Standing section element with color properties
  * @returns {Object} Object with fillColor and strokeColor
  */
-export function getStandingSectionColors(isSoldOut, element) {
+export function getStandingSectionColors(
+  isSoldOut: boolean,
+  element: StandingSectionElement,
+): { fillColor: string; strokeColor: string; textColor: string } {
   if (isSoldOut) {
     return {
       fillColor: "#f3f4f6", // Gray background when sold out

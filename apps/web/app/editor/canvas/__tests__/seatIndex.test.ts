@@ -17,9 +17,11 @@ const seats = {
 describe("buildSeatsByRow", () => {
   test("groups seats by rowId and skips standalone seats", () => {
     const byRow = buildSeatsByRow(seats);
-    expect(byRow.get("r1").length).toBe(3);
-    expect(byRow.get("r2").length).toBe(2);
-    expect(byRow.has(undefined)).toBe(false);
+    const r1 = byRow.get("r1");
+    const r2 = byRow.get("r2");
+    if (!r1 || !r2) throw new Error("expected test rows to be indexed");
+    expect(r1.length).toBe(3);
+    expect(r2.length).toBe(2);
     // The standalone seat must not appear under any row.
     const all = [...byRow.values()].flat().map((s) => s.id);
     expect(all.includes("loose")).toBe(false);
@@ -27,7 +29,9 @@ describe("buildSeatsByRow", () => {
 
   test("accepts an array as well as a map", () => {
     const byRow = buildSeatsByRow(Object.values(seats));
-    expect(byRow.get("r1").length).toBe(3);
+    const r1 = byRow.get("r1");
+    if (!r1) throw new Error("expected r1 to be indexed");
+    expect(r1.length).toBe(3);
   });
 });
 

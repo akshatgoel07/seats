@@ -1,9 +1,11 @@
 package httpx
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -249,6 +251,145 @@ func Auth(enabled bool, authn Authenticator) Middleware {
 			}
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// gzipMinSize is the smallest body we bother compressing; below it the gzip
+// framing overhead isn't worth the CPU (covers errors, 304/204, tiny lists).
+const gzipMinSize = 1024
+
+// gzipPool reuses gzip.Writers (BestSpeed: ~50-150 MB/s/core, far cheaper than
+// the network transfer it removes) to avoid a per-request allocation.
+var gzipPool = sync.Pool{
+	New: func() any {
+		w, _ := gzip.NewWriterLevel(io.Discard, gzip.BestSpeed)
+		return w
+	},
+}
+
+// Gzip compresses JSON responses for clients that accept gzip. Large seat/scene
+// payloads are highly repetitive and shrink ~9x, which is the dominant lever for
+// keeping multi-MB responses under a latency budget on real networks.
+//
+// It defers WriteHeader until the first body bytes so the decision (and the
+// Content-Encoding header) can be made once the body size/type is known.
+func Gzip() Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+				next.ServeHTTP(w, r)
+				return
+			}
+			gw := &gzipResponseWriter{ResponseWriter: w, minSize: gzipMinSize}
+			defer gw.finalize()
+			next.ServeHTTP(gw, r)
+		})
+	}
+}
+
+type gzipResponseWriter struct {
+	http.ResponseWriter
+	minSize       int
+	status        int
+	headerWritten bool
+	decided       bool
+	gz            *gzip.Writer
+	buf           []byte
+}
+
+func (g *gzipResponseWriter) WriteHeader(status int) {
+	// Deferred: we set Content-Encoding (and call the real WriteHeader) only
+	// once we know whether the body will be compressed.
+	g.status = status
+}
+
+func (g *gzipResponseWriter) Write(b []byte) (int, error) {
+	if g.decided {
+		if g.gz != nil {
+			return g.gz.Write(b)
+		}
+		return g.ResponseWriter.Write(b)
+	}
+	// Fast path: a single large write (our typical full-payload Write) is
+	// compressed directly without an intermediate copy.
+	if len(g.buf) == 0 && len(b) >= g.minSize {
+		g.decideAndWrite(b)
+		return len(b), nil
+	}
+	g.buf = append(g.buf, b...)
+	if len(g.buf) >= g.minSize {
+		first := g.buf
+		g.buf = nil
+		g.decideAndWrite(first)
+	}
+	return len(b), nil
+}
+
+func (g *gzipResponseWriter) decideAndWrite(first []byte) {
+	g.decided = true
+	if strings.Contains(g.Header().Get("Content-Type"), "application/json") {
+		g.Header().Set("Content-Encoding", "gzip")
+		addVary(g.Header(), "Accept-Encoding")
+		g.Header().Del("Content-Length")
+		g.writeStatus()
+		gz := gzipPool.Get().(*gzip.Writer)
+		gz.Reset(g.ResponseWriter)
+		g.gz = gz
+		_, _ = g.gz.Write(first)
+		return
+	}
+	g.writeStatus()
+	_, _ = g.ResponseWriter.Write(first)
+}
+
+func (g *gzipResponseWriter) writeStatus() {
+	if g.headerWritten {
+		return
+	}
+	g.headerWritten = true
+	if g.status == 0 {
+		g.status = http.StatusOK
+	}
+	g.ResponseWriter.WriteHeader(g.status)
+}
+
+// finalize flushes a sub-threshold body uncompressed and closes the gzip writer.
+func (g *gzipResponseWriter) finalize() {
+	if !g.decided {
+		g.decided = true
+		g.writeStatus()
+		if len(g.buf) > 0 {
+			_, _ = g.ResponseWriter.Write(g.buf)
+			g.buf = nil
+		}
+		return
+	}
+	if g.gz != nil {
+		_ = g.gz.Close()
+		gzipPool.Put(g.gz)
+		g.gz = nil
+	}
+}
+
+// Flush implements http.Flusher. A Flush forces the compress/no-compress
+// decision with whatever has been written so far; otherwise sub-threshold bytes
+// would sit in g.buf until the handler returned.
+func (g *gzipResponseWriter) Flush() {
+	if !g.decided {
+		first := g.buf
+		g.buf = nil
+		if len(first) > 0 {
+			g.decideAndWrite(first)
+		} else {
+			g.decided = true
+			g.writeStatus()
+		}
+	}
+	if g.gz != nil {
+		_ = g.gz.Flush()
+	}
+	if f, ok := g.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
 	}
 }
 

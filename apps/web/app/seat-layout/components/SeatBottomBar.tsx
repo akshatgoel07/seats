@@ -1,12 +1,20 @@
 "use client";
 import React from "react";
+import type { SeatType } from "../types.ts";
+
+type SeatBottomBarProps = {
+  openSeatsCount: number;
+  seatTypes: SeatType[];
+  selectedLegendType: SeatType | null;
+  onLegendClick: (seatType: SeatType) => void;
+};
 
 const SeatBottomBar = ({
   openSeatsCount,
   seatTypes,
   selectedLegendType,
   onLegendClick,
-}) => {
+}: SeatBottomBarProps) => {
   return (
     <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl px-4 py-3 z-20 border border-white/20">
       <div className="flex items-center gap-6">
@@ -33,8 +41,8 @@ const SeatBottomBar = ({
         <div className="flex items-center gap-4">
           {/* Dynamic Seat Type Filters with Prices */}
           {seatTypes
-            .filter((seatType) => seatType.sst_is_active === "Y")
-            .map((seatType) => {
+            .filter((seatType: SeatType) => seatType.sst_is_active === "Y")
+            .map((seatType: SeatType) => {
               const isSelected = selectedLegendType?.sst_id === seatType.sst_id;
               return (
                 <div

@@ -7,7 +7,7 @@
  * on (a true, independent deep copy) plus undo/redo round-tripping.
  */
 import { editorReducer } from "../reducer.ts";
-import { createDefaultEditorState } from "../types.ts";
+import { createDefaultEditorState, createSeat } from "../types.ts";
 import { ACTIONS } from "../actions.ts";
 
 describe("editorReducer history", () => {
@@ -29,7 +29,7 @@ describe("editorReducer history", () => {
     const next = editorReducer(state, { type: ACTIONS.COMMIT_TO_HISTORY });
 
     // Mutating the live scene must not bleed into the committed snapshot.
-    state.scene.seats["__probe__"] = { id: "__probe__" };
+    state.scene.seats["__probe__"] = createSeat("__probe_row__", 0, 0, "__probe__", "default");
     expect(Object.prototype.hasOwnProperty.call(next.history.present.seats, "__probe__")).toBe(false);
   });
 

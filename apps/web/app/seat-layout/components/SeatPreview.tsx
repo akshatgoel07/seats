@@ -1,5 +1,133 @@
 "use client";
 import React, { useMemo, useCallback, useState, useRef, useEffect } from "react";
+import type {
+  ContentBounds,
+  Point,
+  RendererElement,
+  RendererScene,
+  RendererSeat,
+  SeatMap,
+  ViewBox,
+  ViewBoxSetter,
+} from "../types.ts";
+
+type PreviewData = {
+  width: number;
+  height: number;
+  actualWidth: number;
+  actualHeight: number;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+  bounds: ContentBounds;
+};
+
+type PreviewSeat = {
+  id: string;
+  x: number;
+  y: number;
+  svgX: number;
+  svgY: number;
+  color: string;
+  size: number;
+  width: number;
+  height: number;
+  isSelected: boolean;
+  shape: "circle" | "rect";
+};
+
+type PreviewElement =
+  | {
+      type: "text";
+      id: string;
+      x: number;
+      y: number;
+      text: string;
+      fontSize: number;
+      fillColor: string;
+      textAlign: string;
+      rotation: number;
+    }
+  | {
+      type: "elementRect";
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      fillColor: string;
+      strokeColor: string;
+      borderRadius: number;
+      label?: string;
+      labelX: number;
+      labelY: number;
+      labelFontSize: number;
+      rotation: number;
+      elementX: number;
+      elementY: number;
+    }
+  | {
+      type: "circle";
+      id: string;
+      cx: number;
+      cy: number;
+      r: number;
+      fillColor: string;
+      strokeColor: string;
+    }
+  | {
+      type: "path";
+      id: string;
+      pathData: string;
+      strokeColor: string;
+      strokeWidth: number;
+    }
+  | {
+      type: "sectionPath";
+      id: string;
+      pathData: string;
+      fillColor: string;
+      strokeColor: string;
+      label?: string;
+      labelX: number;
+      labelY: number;
+      labelFontSize: number;
+      labelRotation?: number;
+      rotation: number;
+      x: number;
+      y: number;
+      hasSeats: boolean;
+    }
+  | {
+      type: "rect";
+      id: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      fillColor: string;
+      strokeColor: string;
+      borderRadius: number;
+      label?: string;
+      labelX: number;
+      labelY: number;
+      labelFontSize: number;
+      labelRotation?: number;
+      rotation: number;
+      elementX: number;
+      elementY: number;
+      hasSeats: boolean;
+    };
+
+type SeatPreviewProps = {
+  contentBounds: ContentBounds | null;
+  viewBox: ViewBox;
+  seatMap: SeatMap;
+  canvasSceneData: RendererScene | null;
+  setViewBox: ViewBoxSetter;
+  getSeatColor: (seat: RendererSeat) => string;
+  selectedSeats: Set<string>;
+};
 
 /**
  * SeatPreview Component - Mini-map showing overview of seat layout
@@ -7,17 +135,6 @@ import React, { useMemo, useCallback, useState, useRef, useEffect } from "react"
  * Clicking on the preview navigates to that area
  */
 const SeatPreview = React.memo((
-  /**
-   * @type {{
-   *   contentBounds: any,
-   *   viewBox: { x: number, y: number, width: number, height: number },
-   *   seatMap: any,
-   *   canvasSceneData: any,
-   *   setViewBox: Function,
-   *   getSeatColor: any,
-   *   selectedSeats: any,
-   * }}
-   */
   {
     contentBounds,
     viewBox,
@@ -26,12 +143,12 @@ const SeatPreview = React.memo((
     setViewBox,
     getSeatColor,
     selectedSeats,
-  }: any,
+  }: SeatPreviewProps,
 ) => {
   const [isDraggingViewport, setIsDraggingViewport] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [viewportStart, setViewportStart] = useState({ x: 0, y: 0 });
-  const svgRef = useRef(/** @type {SVGSVGElement | null} */ (null));
+  const svgRef = useRef<SVGSVGElement | null>(null);
   // Calculate actual bounds from seatMap (transformed positions) and canvas elements
   // This ensures the preview matches the actual rendered content
   const actualBounds = useMemo(() => {
@@ -43,7 +160,7 @@ const SeatPreview = React.memo((
 
     // Calculate bounds from actual seat positions (transformed coordinates)
     if (seatMap && Object.keys(seatMap).length > 0) {
-      Object.values(seatMap).forEach((seat) => {
+      Object.values(seatMap).forEach((seat: RendererSeat) => {
         const { position, dimensions } = seat;
         const halfWidth = (dimensions?.width || 20) / 2;
         const halfHeight = (dimensions?.height || 20) / 2;
@@ -58,7 +175,7 @@ const SeatPreview = React.memo((
 
     // Also include elements in bounds
     if (canvasSceneData?.elements) {
-      Object.values(canvasSceneData.elements).forEach((element) => {
+      Object.values(canvasSceneData.elements).forEach((element: RendererElement) => {
         if (element.type === "seating-section" || element.type === "standing-section") {
           const scale = element.scale || 1.0;
           const halfWidth = (element.width * scale) / 2;
@@ -69,7 +186,7 @@ const SeatPreview = React.memo((
           maxY = Math.max(maxY, element.y + halfHeight);
           hasContent = true;
         } else if (element.type === "path" && element.points && element.points.length > 0) {
-          element.points.forEach((point) => {
+          element.points.forEach((point: Point) => {
             minX = Math.min(minX, point.x);
             minY = Math.min(minY, point.y);
             maxX = Math.max(maxX, point.x);
@@ -110,11 +227,13 @@ const SeatPreview = React.memo((
       maxY: centerY + paddedHeight / 2,
       width: paddedWidth,
       height: paddedHeight,
+      centerX,
+      centerY,
     };
   }, [seatMap, canvasSceneData?.elements, contentBounds]);
 
   // Calculate preview dimensions and scale
-  const previewData = useMemo(() => {
+  const previewData = useMemo<PreviewData | null>(() => {
     if (!actualBounds || !actualBounds.width || !actualBounds.height) return null;
     if (actualBounds.width <= 0 || actualBounds.height <= 0) return null;
 
@@ -180,7 +299,7 @@ const SeatPreview = React.memo((
 
   // Handle click on preview to navigate
   const handlePreviewClick = useCallback(
-    (e) => {
+    (e: React.MouseEvent<SVGSVGElement>) => {
       // Don't navigate if we're dragging the viewport
       if (isDraggingViewport) return;
       if (!previewData || !setViewBox) return;
@@ -208,7 +327,7 @@ const SeatPreview = React.memo((
       }
 
       // Center viewBox on clicked position
-      setViewBox((prev) => ({
+      setViewBox((prev: ViewBox) => ({
         ...prev,
         x: svgX - prev.width / 2,
         y: svgY - prev.height / 2,
@@ -219,7 +338,7 @@ const SeatPreview = React.memo((
 
   // Handle drag start on viewport indicator
   const handleViewportDragStart = useCallback(
-    (e) => {
+    (e: React.MouseEvent<SVGElement>) => {
       e.stopPropagation(); // Prevent preview click handler
       if (!previewData || !viewportRect) return;
 
@@ -239,7 +358,7 @@ const SeatPreview = React.memo((
 
   // Handle drag move
   const handleViewportDragMove = useCallback(
-    (e) => {
+    (e: MouseEvent) => {
       if (!isDraggingViewport || !previewData || !setViewBox || !viewportRect)
         return;
 
@@ -296,7 +415,7 @@ const SeatPreview = React.memo((
   // Add global mouse move and mouse up listeners for dragging
   useEffect(() => {
     if (isDraggingViewport) {
-      const handleMouseMove = (e) => {
+      const handleMouseMove = (e: MouseEvent) => {
         handleViewportDragMove(e);
       };
 
@@ -332,7 +451,7 @@ const SeatPreview = React.memo((
 
   // Calculate seats to render in preview with proper spacing
   // Renders differently based on whether boundary paths exist
-  const previewSeats = useMemo(() => {
+  const previewSeats = useMemo<PreviewSeat[]>(() => {
     if (!hasSeats || !previewData) {
       return [];
     }
@@ -346,11 +465,17 @@ const SeatPreview = React.memo((
     // Configuration based on layout type
     // Unified to always use the "theater" style (circles) for a consistent, premium look
     // Updated geometry settings for better density and visibility
-    const config = { minSize: 2, maxSize: 4, sizeMultiplier: 1.0, gridSize: 2, shape: 'circle' };
+    const config = {
+      minSize: 2,
+      maxSize: 4,
+      sizeMultiplier: 1.0,
+      gridSize: 2,
+      shape: "circle" as const,
+    };
 
     // First pass: Calculate all seat positions and group by actual geometry
-    const allSeats = [];
-    const seatsByRow = new Map(); // Group seats by row to detect actual spacing
+    const allSeats: PreviewSeat[] = [];
+    const seatsByRow = new Map<number, PreviewSeat[]>(); // Group seats by row to detect actual spacing
 
     Object.entries(seatMap).forEach(([seatId, seat]) => {
       const { position, dimensions } = seat;
@@ -376,7 +501,7 @@ const SeatPreview = React.memo((
         const scaledSize = baseSize * scale;
         const previewSize = Math.max(config.minSize, Math.min(config.maxSize, scaledSize * config.sizeMultiplier));
 
-        const seatData = {
+        const seatData: PreviewSeat = {
           id: seatId,
           x: previewX,
           y: previewY,
@@ -397,7 +522,8 @@ const SeatPreview = React.memo((
         if (!seatsByRow.has(rowKey)) {
           seatsByRow.set(rowKey, []);
         }
-        seatsByRow.get(rowKey).push(seatData);
+        const rowSeats = seatsByRow.get(rowKey);
+        if (rowSeats) rowSeats.push(seatData);
       }
     });
 
@@ -408,8 +534,8 @@ const SeatPreview = React.memo((
     let avgSeatSpacingY = 30;
 
     if (seatsByRow.size > 0) {
-      const spacingsX = [];
-      const spacingsY = [];
+      const spacingsX: number[] = [];
+      const spacingsY: number[] = [];
 
       // Calculate X spacing (within rows)
       seatsByRow.forEach((rowSeats) => {
@@ -429,7 +555,7 @@ const SeatPreview = React.memo((
       for (let i = 1; i < rowYPositions.length; i++) {
         const row1 = seatsByRow.get(rowYPositions[i - 1]);
         const row2 = seatsByRow.get(rowYPositions[i]);
-        if (row1.length > 0 && row2.length > 0) {
+        if (row1 && row2 && row1.length > 0 && row2.length > 0) {
           const spacing = Math.abs(row2[0].svgY - row1[0].svgY);
           if (spacing > 0 && spacing < 100) {
             spacingsY.push(spacing);
@@ -459,7 +585,7 @@ const SeatPreview = React.memo((
     );
 
     // Second pass: Apply intelligent spatial thinning
-    const seats = [];
+    const seats: PreviewSeat[] = [];
     const occupiedGrid = new Map();
 
     // Sort by position for consistent thinning (prioritize seats closer to top-left)
@@ -483,11 +609,11 @@ const SeatPreview = React.memo((
 
   // Memoize elements to prevent recalculation on every render
   // Render seating sections, boundaries, and other non-seat elements
-  const previewElements = useMemo(() => {
+  const previewElements = useMemo<PreviewElement[]>(() => {
     if (!canvasSceneData?.elements || !previewData) return [];
 
     const { scale, offsetX, offsetY, bounds, width, height } = previewData;
-    const elements = [];
+    const elements: PreviewElement[] = [];
 
     Object.entries(canvasSceneData.elements).forEach(([elementId, element]) => {
       // Handle text elements (for labels like "OFFICIALS", "COURTSIDE", etc.)
@@ -559,15 +685,15 @@ const SeatPreview = React.memo((
       else if (element.type === "path" && element.points && element.label === "Boundary") {
         // Calculate center point for scaling (if needed)
         const centerX =
-          element.points.reduce((sum, p) => sum + p.x, 0) /
+          element.points.reduce((sum: number, p: Point) => sum + p.x, 0) /
           element.points.length;
         const centerY =
-          element.points.reduce((sum, p) => sum + p.y, 0) /
+          element.points.reduce((sum: number, p: Point) => sum + p.y, 0) /
           element.points.length;
         const elementScale = element.scale || 1.0;
 
         // Apply scaling to points
-        const scaledPoints = element.points.map((point) => {
+        const scaledPoints = element.points.map((point: Point) => {
           let adjustedX = point.x;
           let adjustedY = point.y;
 
@@ -581,7 +707,7 @@ const SeatPreview = React.memo((
           const x = (adjustedX - bounds.minX) * scale + offsetX;
           const y = (adjustedY - bounds.minY) * scale + offsetY;
           return { x, y };
-        }).filter((p) => p.x >= -10 && p.x <= width + 10 && p.y >= -10 && p.y <= height + 10);
+        }).filter((p: Point) => p.x >= -10 && p.x <= width + 10 && p.y >= -10 && p.y <= height + 10);
 
         if (scaledPoints.length >= 2) {
           let pathData = `M ${scaledPoints[0].x} ${scaledPoints[0].y}`;
@@ -675,12 +801,12 @@ const SeatPreview = React.memo((
           const curveHandles = element.pathBoundary.curveHandles || {};
 
           const transformedPoints = points
-            .map((point) => {
+            .map((point: Point) => {
               const x = (point.x - bounds.minX) * scale + offsetX;
               const y = (point.y - bounds.minY) * scale + offsetY;
               return { x, y };
             })
-            .filter((p) => p.x >= -10 && p.x <= width + 10 && p.y >= -10 && p.y <= height + 10);
+            .filter((p: Point) => p.x >= -10 && p.x <= width + 10 && p.y >= -10 && p.y <= height + 10);
 
           if (transformedPoints.length >= 2) {
             let pathData = `M ${transformedPoints[0].x} ${transformedPoints[0].y}`;
@@ -787,7 +913,7 @@ const SeatPreview = React.memo((
         className="cursor-pointer hover:opacity-90 transition-opacity"
         onClick={handlePreviewClick}
         style={{ display: "block" }}
-        {.../** @type {any} */ ({ title: "Click to navigate to that area" })}
+        aria-label="Click to navigate to that area"
       >
         {/* Background - white like main view */}
         <rect
@@ -1107,7 +1233,7 @@ const SeatPreview = React.memo((
       )}
     </div>
   );
-}, (prevProps: any, nextProps: any) => {
+}, (prevProps: SeatPreviewProps, nextProps: SeatPreviewProps) => {
   // Custom comparison function for React.memo
   // Only re-render if critical props change
   // Check viewBox values individually for better performance

@@ -4,7 +4,13 @@
  */
 import { buildRowAggregates } from "../seatUtils.ts";
 
-const seat = (id, rowId, x, y, status = "0") => ({
+const seat = (
+  id: string,
+  rowId: string | null,
+  x: number,
+  y: number,
+  status = "0",
+) => ({
   sl_id: id,
   rowId,
   sl_seat_status: status,
@@ -36,7 +42,7 @@ describe("buildRowAggregates", () => {
   });
 
   test("seats without a rowId become their own solo group", () => {
-    const map = { s1: { ...seat("s1", null, 5, 5), rowId: undefined } };
+    const map = { s1: { ...seat("s1", null, 5, 5), rowId: undefined as string | undefined } };
     const agg = buildRowAggregates(map);
     expect(agg.length).toBe(1);
     expect(agg[0].total).toBe(1);

@@ -1,7 +1,14 @@
 import React from "react";
 import { PropertySection, InputField } from "./UIComponents.tsx";
+import type { EditorScene } from "../../types.ts";
 
-export const SceneProperties = ({ scene, onUpdateView }) => {
+export const SceneProperties = ({
+  scene,
+  onUpdateView,
+}: {
+  scene: EditorScene;
+  onUpdateView: (updates: Partial<EditorScene["view"]>) => void;
+}) => {
   return (
     <PropertySection title="Scene">
       <InputField
@@ -18,7 +25,7 @@ export const SceneProperties = ({ scene, onUpdateView }) => {
           type="number"
           value={scene.view.scale.toFixed(2)}
           onChange={(value) =>
-            onUpdateView({ scale: parseFloat(value) || 1 })
+            onUpdateView({ scale: parseFloat(String(value)) || 1 })
           }
           min="0.1"
           max="5"
@@ -29,7 +36,7 @@ export const SceneProperties = ({ scene, onUpdateView }) => {
           type="number"
           value={Math.round(scene.view.tx)}
           onChange={(value) =>
-            onUpdateView({ tx: parseInt(value) || 0 })
+            onUpdateView({ tx: parseInt(String(value)) || 0 })
           }
         />
         <InputField
@@ -37,7 +44,7 @@ export const SceneProperties = ({ scene, onUpdateView }) => {
           type="number"
           value={Math.round(scene.view.ty)}
           onChange={(value) =>
-            onUpdateView({ ty: parseInt(value) || 0 })
+            onUpdateView({ ty: parseInt(String(value)) || 0 })
           }
         />
       </div>

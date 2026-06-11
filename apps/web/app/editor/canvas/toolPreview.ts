@@ -1,18 +1,45 @@
+import {
+  ELEMENT_TYPES as EDITOR_ELEMENT_TYPES,
+} from "../types.ts";
+import type { EditorCategory, EditorState, Point } from "../types.ts";
+
+type ToolSettingMap = Record<string, string | number | undefined>;
+type SnapLine = { type: "vertical" | "horizontal"; pos: number };
+
+function numberSetting(
+  settings: ToolSettingMap,
+  key: string,
+  fallback: number,
+): number {
+  const value = settings[key];
+  return value ? Number(value) : fallback;
+}
+
+function stringSetting(
+  settings: ToolSettingMap,
+  key: string,
+  fallback: string,
+): string {
+  const value = settings[key];
+  return typeof value === "string" && value ? value : fallback;
+}
+
 /**
  * Render tool preview when hovering with an active tool
  * Shows what will be placed when the user clicks
  */
 export function renderToolPreview(
-  ctx,
-  state,
-  mousePosition,
-  worldToScreen,
-  ELEMENT_TYPES,
-  categoryMap = new Map(),
+  ctx: CanvasRenderingContext2D,
+  state: EditorState,
+  mousePosition: Point | null,
+  worldToScreen: (x: number, y: number) => Point,
+  elementTypes: typeof EDITOR_ELEMENT_TYPES,
+  categoryMap: Map<string, EditorCategory> = new Map(),
 ) {
   if (!mousePosition) return;
 
   const { currentTool, toolSettings } = state;
+  const settingsByTool = toolSettings as Record<string, ToolSettingMap>;
 
   // Skip preview if already drawing/dragging
   if (!currentTool || currentTool === "select" || currentTool === "pan") return;
@@ -25,13 +52,13 @@ export function renderToolPreview(
 
   // Seat tool preview
   if (currentTool === "seat") {
-    const seatToolSettings = toolSettings[currentTool] || {};
+    const seatToolSettings = settingsByTool[currentTool] || {};
     const categoryId =
-      seatToolSettings.categoryId ||
+      stringSetting(seatToolSettings, "categoryId", "") ||
       state.scene.venue?.categories?.[0]?.id ||
       "default";
-    const seatWidth = (seatToolSettings.width || 20) * scale;
-    const seatHeight = (seatToolSettings.height || 20) * scale;
+    const seatWidth = numberSetting(seatToolSettings, "width", 20) * scale;
+    const seatHeight = numberSetting(seatToolSettings, "height", 20) * scale;
 
     const category = categoryMap.get(categoryId);
     const color = category?.color || "#cccccc";
@@ -55,16 +82,16 @@ export function renderToolPreview(
 
   // Row line tool preview - show a single seat preview
   else if (currentTool === "row-line" || currentTool === "row-arc") {
-    const rowToolSettings = toolSettings[currentTool] || {};
+    const rowToolSettings = settingsByTool[currentTool] || {};
     const categoryId =
-      rowToolSettings.categoryId ||
+      stringSetting(rowToolSettings, "categoryId", "") ||
       state.scene.venue?.categories?.[0]?.id ||
       "default";
     const seatWidth =
-      (rowToolSettings.seatWidth || state.globalSettings?.seatWidth || 20) *
+      numberSetting(rowToolSettings, "seatWidth", state.globalSettings?.seatWidth || 20) *
       scale;
     const seatHeight =
-      (rowToolSettings.seatHeight || state.globalSettings?.seatHeight || 20) *
+      numberSetting(rowToolSettings, "seatHeight", state.globalSettings?.seatHeight || 20) *
       scale;
 
     const category = categoryMap.get(categoryId);
@@ -89,12 +116,12 @@ export function renderToolPreview(
 
   // Circle tool preview
   else if (currentTool === "element-circle") {
-    const circleSettings = toolSettings[currentTool] || {};
-    const radius = (circleSettings.radius || 40) * scale;
+    const circleSettings = settingsByTool[currentTool] || {};
+    const radius = numberSetting(circleSettings, "radius", 40) * scale;
 
-    ctx.fillStyle = circleSettings.fillColor || "#e8f4ff";
-    ctx.strokeStyle = circleSettings.strokeColor || "#2563eb";
-    ctx.lineWidth = circleSettings.strokeWidth || 2;
+    ctx.fillStyle = stringSetting(circleSettings, "fillColor", "#e8f4ff");
+    ctx.strokeStyle = stringSetting(circleSettings, "strokeColor", "#2563eb");
+    ctx.lineWidth = numberSetting(circleSettings, "strokeWidth", 2);
 
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, radius, 0, 2 * Math.PI);
@@ -115,14 +142,14 @@ export function renderToolPreview(
 
   // Rectangle tool preview
   else if (currentTool === "element-rectangle") {
-    const rectSettings = toolSettings[currentTool] || {};
-    const width = (rectSettings.width || 100) * scale;
-    const height = (rectSettings.height || 60) * scale;
-    const borderRadius = (rectSettings.borderRadius || 8) * scale;
+    const rectSettings = settingsByTool[currentTool] || {};
+    const width = numberSetting(rectSettings, "width", 100) * scale;
+    const height = numberSetting(rectSettings, "height", 60) * scale;
+    const borderRadius = numberSetting(rectSettings, "borderRadius", 8) * scale;
 
-    ctx.fillStyle = rectSettings.fillColor || "#f0f9ff";
-    ctx.strokeStyle = rectSettings.strokeColor || "#0ea5e9";
-    ctx.lineWidth = rectSettings.strokeWidth || 2;
+    ctx.fillStyle = stringSetting(rectSettings, "fillColor", "#f0f9ff");
+    ctx.strokeStyle = stringSetting(rectSettings, "strokeColor", "#0ea5e9");
+    ctx.lineWidth = numberSetting(rectSettings, "strokeWidth", 2);
 
     ctx.beginPath();
     ctx.roundRect(
@@ -149,15 +176,15 @@ export function renderToolPreview(
 
   // Text tool preview
   else if (currentTool === "element-text") {
-    const textSettings = toolSettings[currentTool] || {};
-    const ctext = textSettings.text || "Text";
-    const fontSize = (textSettings.fontSize || 16) * scale;
-    const fontWeight = textSettings.fontWeight || "normal";
-    const fontFamily = textSettings.fontFamily || "Arial";
+    const textSettings = settingsByTool[currentTool] || {};
+    const ctext = stringSetting(textSettings, "text", "Text");
+    const fontSize = numberSetting(textSettings, "fontSize", 16) * scale;
+    const fontWeight = stringSetting(textSettings, "fontWeight", "normal");
+    const fontFamily = stringSetting(textSettings, "fontFamily", "Arial");
 
-    ctx.fillStyle = textSettings.fillColor || "#000000";
+    ctx.fillStyle = stringSetting(textSettings, "fillColor", "#000000");
     ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
-    ctx.textAlign = textSettings.textAlign || "center";
+    ctx.textAlign = stringSetting(textSettings, "textAlign", "center") as CanvasTextAlign;
     ctx.textBaseline = "middle";
 
     ctx.fillText(ctext, screenPos.x, screenPos.y);
@@ -174,33 +201,33 @@ export function renderToolPreview(
 
   // Table tool preview
   else if (currentTool === "element-table") {
-    const tableSettings = toolSettings[currentTool] || {};
-    const tableRadius = (tableSettings.tableRadius || 30) * scale;
-    const seatRadius = tableSettings.seatRadius || 39;
-    const seatCount = tableSettings.seatCount || 10;
-    const fillColor = tableSettings.fillColor || "#f0f0f0";
-    const strokeColor = tableSettings.strokeColor || "#333333";
-    const strokeWidth = tableSettings.strokeWidth || 2;
+    const tableSettings = settingsByTool[currentTool] || {};
+    const tableRadius = numberSetting(tableSettings, "tableRadius", 30) * scale;
+    const seatRadius = numberSetting(tableSettings, "seatRadius", 39);
+    const seatCount = numberSetting(tableSettings, "seatCount", 10);
+    const fillColor = stringSetting(tableSettings, "fillColor", "#f0f0f0");
+    const strokeColor = stringSetting(tableSettings, "strokeColor", "#333333");
+    const strokeWidth = numberSetting(tableSettings, "strokeWidth", 2);
 
     // Get seat color from selected category
     const categoryId =
-      tableSettings.categoryId ||
+      stringSetting(tableSettings, "categoryId", "") ||
       state.scene.venue?.categories?.[0]?.id ||
       "default";
     const category = categoryMap.get(categoryId);
     const seatColor = category?.color || "#cccccc";
 
     // Table snapping: Find nearby tables and snap to X or Y axis
-    const snapTolerance = tableSettings.snapTolerance || 25; // pixels
+    const snapTolerance = numberSetting(tableSettings, "snapTolerance", 25); // pixels
     let snappedX = mousePosition.x;
     let snappedY = mousePosition.y;
     let xSnapped = false;
     let ySnapped = false;
-    let snapLines = []; // Store snap lines to draw
+    let snapLines: SnapLine[] = []; // Store snap lines to draw
 
     // Check all existing tables (circle elements with "Table" label pattern)
     Object.values(state.scene.elements).forEach((existingElement) => {
-      if (existingElement.type === ELEMENT_TYPES.CIRCLE &&
+      if (existingElement.type === elementTypes.CIRCLE &&
           (existingElement.label === "Table" ||
            existingElement.label?.startsWith("T") ||
            existingElement.label?.includes("Table"))) {
@@ -211,7 +238,7 @@ export function renderToolPreview(
           if (xDistance < snapTolerance) {
             snappedX = existingElement.x;
             xSnapped = true;
-            snapLines.push({ type: 'vertical', pos: existingElement.x });
+            snapLines.push({ type: "vertical", pos: existingElement.x });
           }
         }
 
@@ -221,7 +248,7 @@ export function renderToolPreview(
           if (yDistance < snapTolerance) {
             snappedY = existingElement.y;
             ySnapped = true;
-            snapLines.push({ type: 'horizontal', pos: existingElement.y });
+            snapLines.push({ type: "horizontal", pos: existingElement.y });
           }
         }
       }
@@ -238,10 +265,10 @@ export function renderToolPreview(
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 5]);
 
-      snapLines.forEach(line => {
+      snapLines.forEach((line: SnapLine) => {
         const lineScreenPos = worldToScreen(line.pos, line.pos);
         ctx.beginPath();
-        if (line.type === 'vertical') {
+        if (line.type === "vertical") {
           ctx.moveTo(lineScreenPos.x, 0);
           ctx.lineTo(lineScreenPos.x, ctx.canvas.height);
         } else {
@@ -305,14 +332,14 @@ export function renderToolPreview(
 
   // Standing section preview
   else if (currentTool === "standing-section") {
-    const standingSettings = toolSettings[currentTool] || {};
-    const width = (standingSettings.width || 150) * scale;
-    const height = (standingSettings.height || 100) * scale;
+    const standingSettings = settingsByTool[currentTool] || {};
+    const width = numberSetting(standingSettings, "width", 150) * scale;
+    const height = numberSetting(standingSettings, "height", 100) * scale;
     const borderRadius = 8 * scale;
 
-    ctx.fillStyle = standingSettings.fillColor || "#e5e7eb";
-    ctx.strokeStyle = standingSettings.strokeColor || "#6b7280";
-    ctx.lineWidth = standingSettings.strokeWidth || 2;
+    ctx.fillStyle = stringSetting(standingSettings, "fillColor", "#e5e7eb");
+    ctx.strokeStyle = stringSetting(standingSettings, "strokeColor", "#6b7280");
+    ctx.lineWidth = numberSetting(standingSettings, "strokeWidth", 2);
 
     ctx.beginPath();
     ctx.roundRect(
@@ -324,12 +351,12 @@ export function renderToolPreview(
     );
     ctx.fill();
 
-    if (standingSettings.strokeWidth > 0) {
+    if (numberSetting(standingSettings, "strokeWidth", 2) > 0) {
       ctx.stroke();
     }
 
     // Draw capacity label
-    const capacity = standingSettings.standingCapacity || 50;
+    const capacity = numberSetting(standingSettings, "standingCapacity", 50);
     ctx.globalAlpha = 1;
     ctx.fillStyle = "#374151";
     ctx.font = `bold ${12 * scale}px Arial`;

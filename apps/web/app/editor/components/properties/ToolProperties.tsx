@@ -8,8 +8,22 @@ import {
   ColorPicker,
 } from "./UIComponents.tsx";
 import { TOOL_TYPES } from "../../types.ts";
+import type { EditorCategory } from "../../types.ts";
 import { ImageDropZone } from "../ImageDropZone.tsx";
 import { Lock, Unlock } from "lucide-react";
+
+type ToolSettings = Record<string, Record<string, any>>;
+type SettingsPatch = Record<string, unknown>;
+type ImageUploadData = { src: string; width: number; height: number };
+type ToolPropertiesProps = {
+  currentTool: string;
+  toolSettings: ToolSettings;
+  categories: EditorCategory[];
+  onToolSettingsUpdate: (toolType: string, settings: SettingsPatch) => void;
+  globalSettings: Record<string, any>;
+  onUpdateGlobalSettings: (settings: SettingsPatch) => void;
+  actions: Record<string, any>;
+};
 
 export const ToolProperties = ({
   currentTool,
@@ -19,7 +33,7 @@ export const ToolProperties = ({
   globalSettings,
   onUpdateGlobalSettings,
   actions,
-}) => {
+}: ToolPropertiesProps) => {
   if (!currentTool) {
     return null;
   }
@@ -110,7 +124,7 @@ export const ToolProperties = ({
         type="number"
         value={settings.radius || 25}
         onChange={(value) => {
-          onToolSettingsUpdate(currentTool, { radius: parseInt(value) || 25 });
+          onToolSettingsUpdate(currentTool, { radius: parseInt(String(value)) || 25 });
         }}
         min="5"
       />
@@ -138,7 +152,7 @@ export const ToolProperties = ({
         value={settings.strokeWidth || 2}
         onChange={(value) => {
           onToolSettingsUpdate(currentTool, {
-            strokeWidth: parseInt(value) || 1,
+            strokeWidth: parseInt(String(value)) || 1,
           });
         }}
         min="1"
@@ -156,7 +170,7 @@ export const ToolProperties = ({
           value={settings.width || 100}
           onChange={(value) => {
             onToolSettingsUpdate(currentTool, {
-              width: parseInt(value) || 100,
+              width: parseInt(String(value)) || 100,
             });
           }}
           min="10"
@@ -167,7 +181,7 @@ export const ToolProperties = ({
           value={settings.height || 80}
           onChange={(value) => {
             onToolSettingsUpdate(currentTool, {
-              height: parseInt(value) || 80,
+              height: parseInt(String(value)) || 80,
             });
           }}
           min="10"
@@ -198,7 +212,7 @@ export const ToolProperties = ({
         value={settings.strokeWidth || 2}
         onChange={(value) => {
           onToolSettingsUpdate(currentTool, {
-            strokeWidth: parseInt(value) || 1,
+            strokeWidth: parseInt(String(value)) || 1,
           });
         }}
         min="1"
@@ -210,7 +224,7 @@ export const ToolProperties = ({
         type="number"
         value={Math.round((settings.rotation || 0) * (180 / Math.PI))}
         onChange={(value) => {
-          const radians = (parseInt(value) || 0) * (Math.PI / 180);
+          const radians = (parseInt(String(value)) || 0) * (Math.PI / 180);
           onToolSettingsUpdate(currentTool, { rotation: radians });
         }}
         min="-180"
@@ -235,7 +249,7 @@ export const ToolProperties = ({
         value={settings.strokeWidth || 2}
         onChange={(value) => {
           onToolSettingsUpdate(currentTool, {
-            strokeWidth: parseInt(value) || 1,
+            strokeWidth: parseInt(String(value)) || 1,
           });
         }}
         min="1"
@@ -248,7 +262,7 @@ export const ToolProperties = ({
         value={settings.opacity || 1.0}
         onChange={(value) => {
           onToolSettingsUpdate(currentTool, {
-            opacity: Math.max(0, Math.min(1, parseFloat(value) || 1)),
+            opacity: Math.max(0, Math.min(1, parseFloat(String(value)) || 1)),
           });
         }}
         min="0"
@@ -258,7 +272,7 @@ export const ToolProperties = ({
     </PropertySection>
   );
 
-  const renderRowToolProperties = (toolType) => {
+  const renderRowToolProperties = (toolType: string) => {
     const isLineRow = toolType === TOOL_TYPES.ROW_LINE;
     const isMultiRow = toolType === TOOL_TYPES.MULTI_ROW;
 
@@ -310,7 +324,7 @@ export const ToolProperties = ({
                   min="1"
                   max="100"
                   value={currentSeatCount}
-                  onClick={(e) => /** @type {HTMLInputElement} */ (e.target).select()}
+                  onClick={(e) => e.currentTarget.select()}
                   onChange={(e) => {
                     const parsedValue = parseInt(e.target.value) || 10;
                     onToolSettingsUpdate(currentTool, {
@@ -354,7 +368,7 @@ export const ToolProperties = ({
                 max="50"
                 step="0.1"
                 value={currentSeatSpacing}
-                onClick={(e) => /** @type {HTMLInputElement} */ (e.target).select()}
+                onClick={(e) => e.currentTarget.select()}
                 onChange={(e) => {
                   const parsedValue = parseFloat(e.target.value) || 7.0;
                   onToolSettingsUpdate(currentTool, {
@@ -392,7 +406,7 @@ export const ToolProperties = ({
             type="number"
             value={currentSeatWidth}
             onChange={(value) => {
-              const parsedValue = parseInt(value) || 20;
+              const parsedValue = parseInt(String(value)) || 20;
               onToolSettingsUpdate(currentTool, { seatWidth: parsedValue });
               onUpdateGlobalSettings({ seatWidth: parsedValue });
             }}
@@ -404,7 +418,7 @@ export const ToolProperties = ({
             type="number"
             value={currentSeatHeight}
             onChange={(value) => {
-              const parsedValue = parseInt(value) || 20;
+              const parsedValue = parseInt(String(value)) || 20;
               onToolSettingsUpdate(currentTool, { seatHeight: parsedValue });
               onUpdateGlobalSettings({ seatHeight: parsedValue });
             }}
@@ -419,7 +433,7 @@ export const ToolProperties = ({
             type="number"
             value={currentRowSpacing}
             onChange={(value) => {
-              const parsedValue = parseInt(value) || 30;
+              const parsedValue = parseInt(String(value)) || 30;
               onToolSettingsUpdate(currentTool, {
                 rowSpacing: parsedValue,
               });
@@ -473,7 +487,7 @@ export const ToolProperties = ({
             type="number"
             value={currentSeatWidth}
             onChange={(value) => {
-              const parsedValue = parseInt(value) || 20;
+              const parsedValue = parseInt(String(value)) || 20;
               onToolSettingsUpdate(currentTool, {
                 width: parsedValue,
                 seatWidth: parsedValue,
@@ -488,7 +502,7 @@ export const ToolProperties = ({
             type="number"
             value={currentSeatHeight}
             onChange={(value) => {
-              const parsedValue = parseInt(value) || 20;
+              const parsedValue = parseInt(String(value)) || 20;
               onToolSettingsUpdate(currentTool, {
                 height: parsedValue,
                 seatHeight: parsedValue,
@@ -505,7 +519,7 @@ export const ToolProperties = ({
           type="number"
           value={currentSeatSpacing}
           onChange={(value) => {
-            const parsedValue = parseFloat(value) || 7.0;
+            const parsedValue = parseFloat(String(value)) || 7.0;
             onToolSettingsUpdate(currentTool, {
               seatSpacing: parsedValue,
             });
@@ -521,7 +535,7 @@ export const ToolProperties = ({
           type="number"
           value={currentRowSpacing}
           onChange={(value) => {
-            const parsedValue = parseInt(value) || 30;
+            const parsedValue = parseInt(String(value)) || 30;
             onToolSettingsUpdate(currentTool, {
               rowSpacing: parsedValue,
             });
@@ -681,7 +695,7 @@ export const ToolProperties = ({
               min="10"
               max="100"
               value={tableRadius}
-              onClick={(e) => /** @type {HTMLInputElement} */ (e.target).select()}
+              onClick={(e) => e.currentTarget.select()}
               onChange={(e) => {
                 const newTableRadius = parseInt(e.target.value) || 30;
                 const updates: any = { tableRadius: newTableRadius };
@@ -721,7 +735,7 @@ export const ToolProperties = ({
           type="number"
           value={seatRadius}
           onChange={(value) => {
-            const newSeatRadius = parseInt(value) || 39;
+            const newSeatRadius = parseInt(String(value)) || 39;
             const updates: any = { seatRadius: newSeatRadius };
 
             if (isRadiusLocked && radiusRatio && tableRadius > 0) {
@@ -740,7 +754,7 @@ export const ToolProperties = ({
           value={settings.seatCount || 10}
           onChange={(value) => {
             onToolSettingsUpdate(currentTool, {
-              seatCount: parseInt(value) || 10,
+              seatCount: parseInt(String(value)) || 10,
             });
           }}
           min="2"
@@ -770,7 +784,7 @@ export const ToolProperties = ({
           value={settings.strokeWidth || 2}
           onChange={(value) => {
             onToolSettingsUpdate(currentTool, {
-              strokeWidth: parseInt(value) || 2,
+              strokeWidth: parseInt(String(value)) || 2,
             });
           }}
           min="1"
@@ -783,7 +797,7 @@ export const ToolProperties = ({
           value={settings.snapTolerance || 25}
           onChange={(value) => {
             onToolSettingsUpdate(currentTool, {
-              snapTolerance: parseInt(value) || 25,
+              snapTolerance: parseInt(String(value)) || 25,
             });
           }}
           min="0"
@@ -795,7 +809,7 @@ export const ToolProperties = ({
   };
 
   const renderImageUploadToolProperties = () => {
-    const handleImageUpload = (imageData) => {
+    const handleImageUpload = (imageData: ImageUploadData) => {
       if (actions && actions.addImage) {
         const { createElement, ELEMENT_TYPES } = require("../../types.ts");
 

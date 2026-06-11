@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/akshat/seats/api/internal/domain"
@@ -47,6 +48,15 @@ type LayoutStore interface {
 	UpdateLayoutMeta(ctx context.Context, id, name string, status domain.LayoutStatus) (domain.Layout, error)
 	DeleteLayout(ctx context.Context, id string) error
 	ListSeats(ctx context.Context, layoutID string) ([]domain.FlatSeat, error)
+	// ListSeatsJSON returns the flat seats already serialized as a JSON array,
+	// built in Postgres (json_agg), so the read path skips per-row Scan + Go
+	// marshal of tens of thousands of structs. Returns "[]" when empty.
+	ListSeatsJSON(ctx context.Context, layoutID string) (json.RawMessage, error)
+	// Exists reports whether a layout row exists, without reading the scene.
+	Exists(ctx context.Context, id string) (bool, error)
+	// GetVersion returns the layout's monotonic version (cache validator) without
+	// reading the scene.
+	GetVersion(ctx context.Context, id string) (int, error)
 	Publish(ctx context.Context, id string) (domain.Layout, error)
 }
 
@@ -60,6 +70,12 @@ type ShowStore interface {
 	DeleteShow(ctx context.Context, id string) error
 	// SeatStatuses returns all per-seat statuses for a show.
 	SeatStatuses(ctx context.Context, showID string) ([]domain.SeatStatus, error)
+	// SeatStatusesJSON returns all per-seat statuses already serialized as a JSON
+	// array, built in Postgres (json_agg). Returns "[]" when empty.
+	SeatStatusesJSON(ctx context.Context, showID string) (json.RawMessage, error)
+	// SeatStatusVersion returns a cheap freshness token for the show's seat
+	// status (count + max(updated_at)) used as an ETag validator.
+	SeatStatusVersion(ctx context.Context, showID string) (string, error)
 	// SetSeatStates updates state/reserve/price for specific seats (admin
 	// block/unblock/price override).
 	SetSeatStates(ctx context.Context, showID string, updates []SeatStateUpdate) error

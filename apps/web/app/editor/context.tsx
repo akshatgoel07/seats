@@ -5,13 +5,21 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
+import type { ReactNode } from "react";
 import { createDefaultEditorState } from "./types.ts";
+import type { EditorState } from "./types.ts";
 import { editorReducer } from "./reducer.ts";
 import { useActionCreators } from "./actions.ts";
 
-const EditorContext = createContext(/** @type {any} */ (null));
+type EditorActions = ReturnType<typeof useActionCreators>;
+type EditorContextValue = {
+  state: EditorState;
+  actions: EditorActions;
+};
 
-export function EditorProvider({ children }) {
+const EditorContext = createContext<EditorContextValue | null>(null);
+
+export function EditorProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(
     editorReducer,
     createDefaultEditorState(),

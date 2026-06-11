@@ -6,6 +6,24 @@ import {
   ColorPicker,
 } from "./UIComponents.tsx";
 import { Lock, Unlock } from "lucide-react";
+import type { EditorElement } from "../../types.ts";
+
+type LooseElement = EditorElement & Record<string, any>;
+type ElementUpdate = Record<string, unknown>;
+type ElementPropertiesProps = {
+  selectedElements: LooseElement[];
+  multipleSelected: boolean;
+  onElementUpdate: (id: string, updates: ElementUpdate) => void;
+  onLockImage: (id: string) => void;
+  onUnlockImage: (id: string) => void;
+  onConvertPathToImage: (id: string) => void;
+  onConvertImageToStandingSection: (id: string) => void;
+  onConvertImageToSeatingSection: (id: string) => void;
+  onConvertRectangleToStandingSection: (id: string) => void;
+  onConvertRectangleToSeatingSection: (id: string) => void;
+  onConvertPathToStandingSection: (id: string) => void;
+  onConvertPathToSeatingSection: (id: string) => void;
+};
 
 export const ElementProperties = ({
   selectedElements,
@@ -20,19 +38,19 @@ export const ElementProperties = ({
   onConvertRectangleToSeatingSection,
   onConvertPathToStandingSection,
   onConvertPathToSeatingSection,
-}) => {
+}: ElementPropertiesProps) => {
   const [aspectRatioLocked, setAspectRatioLocked] = useState(true);
-  const [rotationAngles, setRotationAngles] = useState({});
-  const [previousRotations, setPreviousRotations] = useState({});
+  const [rotationAngles, setRotationAngles] = useState<Record<string, number>>({});
+  const [previousRotations, setPreviousRotations] = useState<Record<string, number>>({});
 
-  const getRotationAngle = (elementId, currentRotation) => {
+  const getRotationAngle = (elementId: string, currentRotation: number) => {
     if (rotationAngles[elementId] !== undefined) {
       return rotationAngles[elementId];
     }
     return Math.round((currentRotation || 0) * (180 / Math.PI));
   };
 
-  const getLabelRotationAngle = (elementId, currentRotation) => {
+  const getLabelRotationAngle = (elementId: string, currentRotation: number) => {
     const labelKey = `${elementId}_label`;
     if (rotationAngles[labelKey] !== undefined) {
       return rotationAngles[labelKey];
@@ -40,8 +58,8 @@ export const ElementProperties = ({
     return Math.round((currentRotation || 0) * (180 / Math.PI));
   };
 
-  const renderSingleElementProperties = (element) => {
-    const rotationAngle = getRotationAngle(element.id, element.rotation);
+  const renderSingleElementProperties = (element: LooseElement) => {
+    const rotationAngle = getRotationAngle(element.id, element.rotation || 0);
     const previousRotation = previousRotations[element.id] || rotationAngle;
     const labelRotationAngle = getLabelRotationAngle(
       element.id,
@@ -82,7 +100,7 @@ export const ElementProperties = ({
               value={Math.round(element.labelX || 0)}
               onChange={(value) => {
                 onElementUpdate(element.id, {
-                  labelX: parseInt(value) || 0,
+                  labelX: parseInt(String(value)) || 0,
                 });
               }}
             />
@@ -92,7 +110,7 @@ export const ElementProperties = ({
               value={Math.round(element.labelY || 0)}
               onChange={(value) => {
                 onElementUpdate(element.id, {
-                  labelY: parseInt(value) || 0,
+                  labelY: parseInt(String(value)) || 0,
                 });
               }}
             />
@@ -185,7 +203,7 @@ export const ElementProperties = ({
             value={Math.round(element.x)}
             onChange={(value) => {
               onElementUpdate(element.id, {
-                x: parseInt(value) || 0,
+                x: parseInt(String(value)) || 0,
               });
             }}
           />
@@ -195,7 +213,7 @@ export const ElementProperties = ({
             value={Math.round(element.y)}
             onChange={(value) => {
               onElementUpdate(element.id, {
-                y: parseInt(value) || 0,
+                y: parseInt(String(value)) || 0,
               });
             }}
           />
@@ -208,10 +226,10 @@ export const ElementProperties = ({
               type="number"
               value={Math.round(element.width)}
               onChange={(value) => {
-                const updates: any = { width: parseInt(value) || 50 };
+                const updates: any = { width: parseInt(String(value)) || 50 };
                 if (element.type === "circle") {
                   updates.radius =
-                    Math.min(parseInt(value) || 50, element.height) / 2;
+                    Math.min(parseInt(String(value)) || 50, element.height) / 2;
                 }
                 onElementUpdate(element.id, updates);
               }}
@@ -222,10 +240,10 @@ export const ElementProperties = ({
               type="number"
               value={Math.round(element.height)}
               onChange={(value) => {
-                const updates: any = { height: parseInt(value) || 50 };
+                const updates: any = { height: parseInt(String(value)) || 50 };
                 if (element.type === "circle") {
                   updates.radius =
-                    Math.min(element.width, parseInt(value) || 50) / 2;
+                    Math.min(element.width, parseInt(String(value)) || 50) / 2;
                 }
                 onElementUpdate(element.id, updates);
               }}
@@ -240,7 +258,7 @@ export const ElementProperties = ({
             type="number"
             value={Math.round(element.radius || 25)}
             onChange={(value) => {
-              const radius = parseInt(value) || 25;
+              const radius = parseInt(String(value)) || 25;
               onElementUpdate(element.id, {
                 radius,
                 width: radius * 2,
@@ -280,7 +298,7 @@ export const ElementProperties = ({
               value={element.strokeWidth || 2}
               onChange={(value) => {
                 onElementUpdate(element.id, {
-                  strokeWidth: parseInt(value) || 1,
+                  strokeWidth: parseInt(String(value)) || 1,
                 });
               }}
               min="1"
@@ -300,7 +318,7 @@ export const ElementProperties = ({
                   onElementUpdate(element.id, {
                     scale: Math.max(
                       0.1,
-                      Math.min(5.0, parseFloat(value) || 1.0),
+                      Math.min(5.0, parseFloat(String(value)) || 1.0),
                     ),
                   });
                 }}
@@ -469,7 +487,7 @@ export const ElementProperties = ({
                 value={element.borderRadius || 0}
                 onChange={(value) => {
                   onElementUpdate(element.id, {
-                    borderRadius: Math.max(0, parseInt(value) || 0),
+                    borderRadius: Math.max(0, parseInt(String(value)) || 0),
                   });
                 }}
                 min="0"
@@ -677,7 +695,7 @@ export const ElementProperties = ({
                 value={element.fontSize || 16}
                 onChange={(value) => {
                   onElementUpdate(element.id, {
-                    fontSize: parseInt(value) || 16,
+                    fontSize: parseInt(String(value)) || 16,
                   });
                 }}
                 min="8"
@@ -873,7 +891,7 @@ export const ElementProperties = ({
                   onElementUpdate(element.id, {
                     scale: Math.max(
                       0.1,
-                      Math.min(5.0, parseFloat(value) || 1.0),
+                      Math.min(5.0, parseFloat(String(value)) || 1.0),
                     ),
                   });
                 }}
@@ -993,7 +1011,7 @@ export const ElementProperties = ({
                 value={element.standingCapacity || 50}
                 onChange={(value) => {
                   onElementUpdate(element.id, {
-                    standingCapacity: Math.max(1, parseInt(value) || 50),
+                    standingCapacity: Math.max(1, parseInt(String(value)) || 50),
                   });
                 }}
                 min="1"
@@ -1022,7 +1040,7 @@ export const ElementProperties = ({
               type="number"
               value={element.entryPoints?.length || 0}
               onChange={(value) => {
-                const count = Math.max(0, parseInt(value) || 0);
+                const count = Math.max(0, parseInt(String(value)) || 0);
                 const entryPoints = [];
                 for (let i = 0; i < count; i++) {
                   entryPoints.push({ x: 0, y: 0, label: `Entry ${i + 1}` });
@@ -1040,7 +1058,7 @@ export const ElementProperties = ({
               type="number"
               value={element.exitPoints?.length || 0}
               onChange={(value) => {
-                const count = Math.max(0, parseInt(value) || 0);
+                const count = Math.max(0, parseInt(String(value)) || 0);
                 const exitPoints = [];
                 for (let i = 0; i < count; i++) {
                   exitPoints.push({ x: 0, y: 0, label: `Exit ${i + 1}` });
@@ -1168,7 +1186,7 @@ export const ElementProperties = ({
                   type="number"
                   value={Math.round(element.width || 0)}
                   onChange={(value) => {
-                    const newWidth = Math.max(10, parseInt(value) || 10);
+                    const newWidth = Math.max(10, parseInt(String(value)) || 10);
                     const updates: any = { width: newWidth };
 
                     if (
@@ -1193,7 +1211,7 @@ export const ElementProperties = ({
                   type="number"
                   value={Math.round(element.height || 0)}
                   onChange={(value) => {
-                    const newHeight = Math.max(10, parseInt(value) || 10);
+                    const newHeight = Math.max(10, parseInt(String(value)) || 10);
                     const updates: any = { height: newHeight };
 
                     if (
@@ -1438,7 +1456,7 @@ export const ElementProperties = ({
         value={element.opacity || 1}
         onChange={(value) => {
           onElementUpdate(element.id, {
-            opacity: Math.max(0, Math.min(1, parseFloat(value) || 1)),
+            opacity: Math.max(0, Math.min(1, parseFloat(String(value)) || 1)),
           });
         }}
         min="0"

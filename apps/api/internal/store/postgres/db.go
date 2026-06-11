@@ -5,8 +5,12 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/akshat/seats/api/internal/store"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	// Register the pgx stdlib driver under the name "pgx".
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -47,4 +51,19 @@ func Open(ctx context.Context, dsn string) (*DB, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return db, nil
+}
+
+// classifyPgError maps driver-level SQLSTATEs onto store sentinels so layers
+// above postgres never see raw pg errors for client-caused conditions.
+func classifyPgError(err error) error {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		switch pgErr.Code {
+		case "23505":
+			return fmt.Errorf("%w: %s", store.ErrConflict, pgErr.ConstraintName)
+		case "22P02":
+			return store.ErrNotFound
+		}
+	}
+	return err
 }

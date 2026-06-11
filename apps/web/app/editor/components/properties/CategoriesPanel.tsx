@@ -1,7 +1,8 @@
 import React from "react";
 import { PropertySection } from "./UIComponents.tsx";
+import type { EditorCategory } from "../../types.ts";
 
-export const CategoriesPanel = ({ categories }) => {
+export const CategoriesPanel = ({ categories }: { categories: EditorCategory[] }) => {
   return (
     <PropertySection title="Categories">
       {categories.map((category) => (

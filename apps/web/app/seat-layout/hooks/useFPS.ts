@@ -11,8 +11,8 @@ export function useFPS() {
   const [minFps, setMinFps] = useState(60);
   const frameCountRef = useRef(0);
   const lastTimeRef = useRef(performance.now());
-  const fpsHistoryRef = useRef(/** @type {number[]} */ ([]));
-  const animationFrameRef = useRef(/** @type {number | null} */ (null));
+  const fpsHistoryRef = useRef<number[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const measureFPS = () => {

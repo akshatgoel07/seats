@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { Toaster } from "sonner";
 
@@ -24,7 +25,7 @@ export const viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body

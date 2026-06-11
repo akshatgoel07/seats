@@ -10,12 +10,46 @@
 
 import { useState, useEffect, useMemo } from "react";
 import ApiService from "@/services/api";
+import type { Scene, SceneCategory, SeatStatus, ShowSeatsPayload } from "@/services/api";
 import { calculateOpenSeats } from "../utils.ts";
 import {
   buildSeatMap,
   buildSeatStatusMap,
   calculateContentBounds,
 } from "../utils/index.ts";
+
+type LegacySeatRecord = {
+  sl_id: string;
+  sl_seat_name: string;
+  sl_seat_status: string;
+  seat_price: number;
+  seat_reserve_type_id: number;
+  screen_seat_type_id: string;
+  is_open_seating_area: string;
+  sl_row_num: number;
+  sl_col_num: number;
+  sst_seat_type: string;
+  sl_meta_data: string;
+};
+
+type LegacySeatType = {
+  sst_id: string;
+  sst_seat_type: string;
+  sst_seat_color_code: string;
+  sst_order: number;
+  is_open_seating_area: string;
+};
+
+type LegacyLayoutData = {
+  status: boolean;
+  Records: LegacySeatRecord[];
+  screen_seat_type: LegacySeatType[];
+  screenDetails: Array<{ screen_meta_data: string; screen_name: string }>;
+};
+
+type ParsedScene = Scene & {
+  showSectionBoundaryInRenderer?: boolean;
+};
 
 /**
  * Adapt the Go API's getShowSeats payload to the legacy `layoutData` shape that
@@ -26,35 +60,35 @@ import {
  * Input:  { show, scene, seats: FlatSeat[], status: SeatStatus[] }
  * Output: { status:true, Records:[...], screen_seat_type:[...], screenDetails:[...] }
  */
-function buildLegacyLayoutData(data) {
-  const scene = data.scene || {};
+function buildLegacyLayoutData(data: ShowSeatsPayload): LegacyLayoutData {
+  const scene = data.scene;
   const categories = scene?.venue?.categories || [];
 
-  const catById = {};
+  const catById: Record<string, SceneCategory> = {};
   categories.forEach((c) => {
     catById[c.id] = c;
   });
 
-  const statusByUid = {};
+  const statusByUid: Record<string, SeatStatus> = {};
   (data.status || []).forEach((s) => {
     statusByUid[s.seatUid] = s;
   });
 
   const Records = (data.seats || []).map((seat) => {
-    const st = statusByUid[seat.seatUid] || {};
-    const cat = catById[seat.categoryId] || {};
-    const available = (st.state ?? 0) === 0;
+    const st = statusByUid[seat.seatUid];
+    const cat = catById[seat.categoryId];
+    const available = (st?.state ?? 0) === 0;
     return {
       sl_id: seat.seatUid,
       sl_seat_name: seat.label,
       sl_seat_status: available ? "0" : "1", // "0" = available
-      seat_price: (st.priceCents ?? 0) / 100,
-      seat_reserve_type_id: st.reserveType ?? 1,
+      seat_price: (st?.priceCents ?? 0) / 100,
+      seat_reserve_type_id: st?.reserveType ?? 1,
       screen_seat_type_id: seat.categoryId,
       is_open_seating_area: seat.isStanding ? "Y" : "N",
       sl_row_num: seat.rowNum,
       sl_col_num: seat.colNum,
-      sst_seat_type: cat.name || "",
+      sst_seat_type: cat?.name || "",
       sl_meta_data: JSON.stringify({
         id: seat.seatUid,
         Xposition: seat.x,
@@ -67,7 +101,7 @@ function buildLegacyLayoutData(data) {
     };
   });
 
-  const screen_seat_type = categories.map((c, i) => ({
+  const screen_seat_type = categories.map((c: SceneCategory, i: number) => ({
     sst_id: c.id,
     sst_seat_type: c.name,
     sst_seat_color_code: c.color,
@@ -95,11 +129,11 @@ function buildLegacyLayoutData(data) {
  * @param {string} mdId - unused (legacy)
  * @returns {Object} Layout data and derived state
  */
-export function useSeatLayout(screenId, ssId, mdId) {
-  const [layoutData, setLayoutData] = useState(/** @type {any} */ (null));
-  const [seatTypes, setSeatTypes] = useState(/** @type {any[]} */ ([]));
+export function useSeatLayout(screenId: string, ssId: string, mdId: string) {
+  const [layoutData, setLayoutData] = useState<LegacyLayoutData | null>(null);
+  const [seatTypes, setSeatTypes] = useState<LegacySeatType[]>([]);
   const [seatTypesMap, setSeatTypesMap] = useState(
-    /** @type {Map<any, any>} */ (new Map()),
+    new Map<string, string>(),
   );
   const [openSeatsCount, setOpenSeatsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -129,7 +163,7 @@ export function useSeatLayout(screenId, ssId, mdId) {
         setLayoutData(buildLegacyLayoutData(data));
       } catch (err) {
         console.error("Error fetching seat layout:", err);
-        setError(err.message || "Failed to fetch seat layout");
+        setError(err instanceof Error ? err.message : "Failed to fetch seat layout");
       } finally {
         setIsLoading(false);
       }
@@ -145,7 +179,7 @@ export function useSeatLayout(screenId, ssId, mdId) {
       setSeatTypes(seatTypesData);
 
       // Create a map for faster lookups
-      const typesMap = new Map();
+      const typesMap = new Map<string, string>();
       seatTypesData.forEach((type) => {
         if (type.sst_seat_type && type.sst_seat_color_code) {
           typesMap.set(type.sst_seat_type, type.sst_seat_color_code);
@@ -185,13 +219,15 @@ export function useSeatLayout(screenId, ssId, mdId) {
         };
 
       const screenDetails = layoutData.screenDetails?.[0];
-      let parsedCanvasSceneData = null;
-      let parsedRows = {};
+      let parsedCanvasSceneData: ParsedScene | null = null;
+      let parsedRows: Record<string, unknown> = {};
       let showSectionBoundary = false;
 
       try {
         if (screenDetails?.screen_meta_data) {
-          parsedCanvasSceneData = JSON.parse(screenDetails.screen_meta_data);
+          parsedCanvasSceneData = JSON.parse(
+            screenDetails.screen_meta_data,
+          ) as ParsedScene;
           parsedRows = parsedCanvasSceneData.rows || {};
           showSectionBoundary =
             parsedCanvasSceneData.showSectionBoundaryInRenderer || false;
@@ -215,7 +251,9 @@ export function useSeatLayout(screenId, ssId, mdId) {
 
   // Calculate bounding box of all seats and elements to prevent zooming out too far
   const contentBounds = useMemo(() => {
-    return calculateContentBounds(canvasSceneData);
+    return calculateContentBounds(
+      canvasSceneData as Parameters<typeof calculateContentBounds>[0],
+    );
   }, [canvasSceneData]);
 
   // Get screen details for display

@@ -1,6 +1,15 @@
 import { useMemo, useRef } from "react";
 import { generateId, createSection } from "./types.ts";
+import type {
+  EditorElement,
+  EditorRow,
+  EditorScene,
+  EditorSeat,
+  EditorState,
+  Point,
+} from "./types.ts";
 import { generateSeatsForRow } from "./geometry.ts";
+import type { Dispatch } from "react";
 
 // Action types
 export const ACTIONS = {
@@ -45,7 +54,14 @@ export const ACTIONS = {
   EXTEND_PATH_SEGMENT: "EXTEND_PATH_SEGMENT",
 };
 
-export function useActionCreators(dispatch, state) {
+type EditorAction = { type: string; payload?: unknown };
+type ViewUpdates = Partial<EditorScene["view"]>;
+type Settings = Record<string, unknown>;
+
+export function useActionCreators(
+  dispatch: Dispatch<EditorAction>,
+  state: EditorState,
+) {
   // Keep a ref to the latest committed state so the few action creators that
   // need to read current state can stay referentially stable instead of being
   // rebuilt every render.
@@ -58,15 +74,15 @@ export function useActionCreators(dispatch, state) {
   // actually skip re-rendering when only unrelated state changes (R2).
   return useMemo(() => {
     return {
-    setTool: (tool) => {
+      setTool: (tool: string) => {
       dispatch({ type: ACTIONS.SET_TOOL, payload: tool });
     },
 
-    setSelection: (ids) => {
+      setSelection: (ids: string[]) => {
       dispatch({ type: ACTIONS.SET_SELECTION, payload: ids });
     },
 
-    addToSelection: (id) => {
+      addToSelection: (id: string) => {
       dispatch({ type: ACTIONS.ADD_TO_SELECTION, payload: id });
     },
 
@@ -74,12 +90,12 @@ export function useActionCreators(dispatch, state) {
       dispatch({ type: ACTIONS.CLEAR_SELECTION });
     },
 
-    updateView: (viewUpdates) => {
+      updateView: (viewUpdates: ViewUpdates) => {
       dispatch({ type: ACTIONS.UPDATE_VIEW, payload: viewUpdates });
     },
 
     // Zoom to fit all content in the viewport
-    zoomToFit: (canvasWidth, canvasHeight, padding = 50) => {
+      zoomToFit: (canvasWidth: number, canvasHeight: number, padding = 50) => {
       const { seats, elements } = stateRef.current.scene;
 
       // Calculate bounding box of all content
@@ -117,7 +133,7 @@ export function useActionCreators(dispatch, state) {
           maxX = Math.max(maxX, element.x + radius);
           maxY = Math.max(maxY, element.y + radius);
         } else if (element.type === "polygon" && element.points) {
-          element.points.forEach(pt => {
+          element.points.forEach((pt: Point) => {
             minX = Math.min(minX, pt.x);
             minY = Math.min(minY, pt.y);
             maxX = Math.max(maxX, pt.x);
@@ -158,24 +174,24 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    addRow: (row) => {
+      addRow: (row: EditorRow) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_ROW, payload: row });
     },
 
-    addSeat: (seat) => {
+      addSeat: (seat: EditorSeat) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_SEAT, payload: seat });
     },
 
-    updateRow: (id, updates, saveHistory = true) => {
+      updateRow: (id: string, updates: Partial<EditorRow>, saveHistory = true) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
       dispatch({ type: ACTIONS.UPDATE_ROW, payload: { id, updates } });
     },
 
-    deleteItems: (ids) => {
+      deleteItems: (ids: string[]) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.DELETE_ITEMS, payload: ids });
     },
@@ -192,11 +208,11 @@ export function useActionCreators(dispatch, state) {
       dispatch({ type: ACTIONS.REDO });
     },
 
-    loadScene: (scene) => {
+      loadScene: (scene: EditorScene) => {
       dispatch({ type: ACTIONS.LOAD_SCENE, payload: scene });
     },
 
-    moveSeats: (seatIds, deltaX, deltaY) => {
+      moveSeats: (seatIds: string[], deltaX: number, deltaY: number) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.MOVE_SEATS,
@@ -204,7 +220,11 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    updateSeat: (seatId, updates, saveHistory = true) => {
+      updateSeat: (
+        seatId: string,
+        updates: Partial<EditorSeat>,
+        saveHistory = true,
+      ) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
@@ -214,7 +234,11 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    updateSeats: (seatIds, updates, saveHistory = true) => {
+      updateSeats: (
+        seatIds: string[],
+        updates: Partial<EditorSeat>,
+        saveHistory = true,
+      ) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
@@ -255,13 +279,13 @@ export function useActionCreators(dispatch, state) {
       dispatch({ type: ACTIONS.COPY_ROWS });
     },
 
-    pasteRows: (offset) => {
+      pasteRows: (offset: Point) => {
       if (stateRef.current.clipboard.isEmpty) return;
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.PASTE_ROWS, payload: { offset } });
     },
 
-    adjustSeatSpacing: (seatIds, spacingDelta) => {
+      adjustSeatSpacing: (seatIds: string[], spacingDelta: number) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.ADJUST_SEAT_SPACING,
@@ -269,7 +293,7 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    rotateSelectedSeats: (angle) => {
+      rotateSelectedSeats: (angle: number) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.ROTATE_SELECTED_SEATS,
@@ -277,19 +301,23 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    addElement: (element) => {
+      addElement: (element: EditorElement) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_ELEMENT, payload: element });
     },
 
-    updateElement: (id, updates, saveHistory = true) => {
+      updateElement: (
+        id: string,
+        updates: Partial<EditorElement>,
+        saveHistory = true,
+      ) => {
       if (saveHistory) {
         dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       }
       dispatch({ type: ACTIONS.UPDATE_ELEMENT, payload: { id, updates } });
     },
 
-    moveElements: (elementIds, deltaX, deltaY) => {
+      moveElements: (elementIds: string[], deltaX: number, deltaY: number) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.MOVE_ELEMENTS,
@@ -297,22 +325,22 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    addImage: (image) => {
+      addImage: (image: EditorElement) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_IMAGE, payload: image });
     },
 
-    updateImage: (id, updates) => {
+      updateImage: (id: string, updates: Partial<EditorElement>) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UPDATE_IMAGE, payload: { id, updates } });
     },
 
-    lockImage: (id) => {
+      lockImage: (id: string) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.LOCK_IMAGE, payload: { id } });
     },
 
-    unlockImage: (id) => {
+      unlockImage: (id: string) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UNLOCK_IMAGE, payload: { id } });
     },
@@ -321,12 +349,12 @@ export function useActionCreators(dispatch, state) {
       dispatch({ type: ACTIONS.COMPLETE_PATH });
     },
 
-    updateGlobalSettings: (settings) => {
+      updateGlobalSettings: (settings: Settings) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UPDATE_GLOBAL_SETTINGS, payload: settings });
     },
 
-    updateToolSettings: (toolType, settings) => {
+      updateToolSettings: (toolType: string, settings: Settings) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({
         type: ACTIONS.UPDATE_TOOL_SETTINGS,
@@ -357,7 +385,7 @@ export function useActionCreators(dispatch, state) {
       });
     },
 
-    ungroupElements: (groupId) => {
+      ungroupElements: (groupId: string) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UNGROUP_ELEMENTS, payload: { groupId } });
     },
@@ -370,12 +398,16 @@ export function useActionCreators(dispatch, state) {
       dispatch({ type: ACTIONS.CANCEL_DRAWING });
     },
 
-    addTableWithSeats: (table, seats) => {
+      addTableWithSeats: (table: EditorElement, seats: EditorSeat[]) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.ADD_TABLE_WITH_SEATS, payload: { table, seats } });
     },
 
-    updateTableGroup: (table, oldSeats, config) => {
+      updateTableGroup: (
+        table: EditorElement,
+        oldSeats: EditorSeat[],
+        config: Settings,
+      ) => {
       dispatch({ type: ACTIONS.SAVE_TO_HISTORY });
       dispatch({ type: ACTIONS.UPDATE_TABLE_GROUP, payload: { table, oldSeats, config } });
     },

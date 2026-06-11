@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 
@@ -42,7 +43,15 @@ func (h *Layout) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Layout) get(w http.ResponseWriter, r *http.Request) {
-	l, err := h.svc.GetLayout(r.Context(), r.PathValue("layoutId"))
+	id := r.PathValue("layoutId")
+	// Cheap version probe → conditional 304, so an unchanged scene is never
+	// read/serialized/transferred again.
+	if ver, err := h.svc.LayoutVersion(r.Context(), id); err == nil {
+		if httpx.CheckETag(w, r, fmt.Sprintf(`"%s-v%d"`, id, ver)) {
+			return // 304 Not Modified
+		}
+	}
+	l, err := h.svc.GetLayout(r.Context(), id)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return
@@ -101,7 +110,7 @@ func (h *Layout) publish(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Layout) listSeats(w http.ResponseWriter, r *http.Request) {
-	seats, err := h.svc.ListSeats(r.Context(), r.PathValue("layoutId"))
+	seats, err := h.svc.ListSeatsJSON(r.Context(), r.PathValue("layoutId"))
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

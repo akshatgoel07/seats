@@ -3,7 +3,7 @@
  */
 import { buildSeatSpatialIndex, querySeatAtPoint } from "../spatialIndex.ts";
 
-const mk = (id, x, y, w = 20, h = 20) => ({
+const mk = (_id: string, x: number, y: number, w = 20, h = 20) => ({
   position: { x, y, rotation: 0 },
   dimensions: { width: w, height: h },
 });

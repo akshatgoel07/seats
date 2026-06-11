@@ -1,5 +1,13 @@
-export function cn(...inputs) {
-  const classes = [];
+type ClassValue =
+  | string
+  | false
+  | null
+  | undefined
+  | ClassValue[]
+  | Record<string, boolean | null | undefined>;
+
+export function cn(...inputs: ClassValue[]): string {
+  const classes: string[] = [];
 
   for (const input of inputs) {
     if (!input) continue;

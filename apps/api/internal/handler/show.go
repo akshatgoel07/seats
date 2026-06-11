@@ -67,8 +67,19 @@ func (h *ShowHandler) delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // seats returns the customer-render payload: scene + flat seats + statuses.
+// A cheap ETag (layout version + seat-status freshness) lets a polling client
+// get a 304 when nothing changed, skipping the multi-MB body entirely.
 func (h *ShowHandler) seats(w http.ResponseWriter, r *http.Request) {
-	payload, err := h.shows.GetShowSeats(r.Context(), r.PathValue("showId"))
+	showID := r.PathValue("showId")
+	etag, sh, err := h.shows.ShowSeatsETag(r.Context(), showID)
+	if err != nil {
+		httpx.WriteError(w, r, err)
+		return
+	}
+	if httpx.CheckETag(w, r, etag) {
+		return // 304 Not Modified
+	}
+	payload, err := h.shows.GetShowSeatsFor(r.Context(), sh)
 	if err != nil {
 		httpx.WriteError(w, r, err)
 		return

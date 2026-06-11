@@ -26,7 +26,8 @@ export default function Home() {
         if (!cancelled) setLayouts(perVenue.flat());
       } catch (err) {
         console.error("Error loading layouts:", err);
-        if (!cancelled) setError(err.message || "Failed to load layouts");
+        const message = err instanceof Error ? err.message : "Failed to load layouts";
+        if (!cancelled) setError(message);
       } finally {
         if (!cancelled) setLoading(false);
       }

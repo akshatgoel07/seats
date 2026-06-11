@@ -4,8 +4,14 @@
  */
 
 import React from "react";
+import type { RendererElement } from "../../types.ts";
 
-export function CircleElement({ element, elementId }) {
+type ElementProps = {
+  element: RendererElement;
+  elementId: string;
+};
+
+export function CircleElement({ element, elementId }: ElementProps) {
   const scale = element.scale || 1.0;
   const scaledX = element.x;
   const scaledY = element.y;

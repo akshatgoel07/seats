@@ -1,6 +1,15 @@
 /**
  * Coordinate transformation utilities for SVG
  */
+import type { RefObject } from "react";
+
+type Point = { x: number; y: number };
+type ViewBox = { x: number; y: number; width: number; height: number };
+type SVGRef = RefObject<SVGSVGElement | null>;
+type TouchPoints = {
+  length: number;
+  [index: number]: { clientX: number; clientY: number };
+};
 
 /**
  * Convert seat position (SVG coords) to screen coordinates
@@ -8,7 +17,7 @@
  * @param {Object} seatPos - Seat position with x and y coordinates
  * @returns {Object} Screen coordinates with x and y
  */
-export function getScreenCoords(svgRef, seatPos) {
+export function getScreenCoords(svgRef: SVGRef, seatPos: Point): Point {
   const svg = svgRef.current;
   if (!svg) return { x: 0, y: 0 };
 
@@ -32,7 +41,11 @@ export function getScreenCoords(svgRef, seatPos) {
  * @param {number} clientY - Mouse client Y position
  * @returns {Object|null} SVG coordinates with x and y, or null if conversion fails
  */
-export function clientToSVGCoords(svgRef, clientX, clientY) {
+export function clientToSVGCoords(
+  svgRef: SVGRef,
+  clientX: number,
+  clientY: number,
+): Point | null {
   const svg = svgRef.current;
   if (!svg) return null;
 
@@ -60,7 +73,11 @@ export function clientToSVGCoords(svgRef, clientX, clientY) {
  * @param {number} scale - Scale factor
  * @returns {Object} Transformed point with x and y
  */
-export function scalePointAroundCenter(point, center, scale) {
+export function scalePointAroundCenter(
+  point: Point,
+  center: Point,
+  scale: number,
+): Point {
   return {
     x: center.x + (point.x - center.x) * scale,
     y: center.y + (point.y - center.y) * scale,
@@ -74,7 +91,11 @@ export function scalePointAroundCenter(point, center, scale) {
  * @param {number} scale - Scale factor
  * @returns {Array} Array of transformed points
  */
-export function scalePointsAroundCenter(points, center, scale) {
+export function scalePointsAroundCenter(
+  points: Point[],
+  center: Point,
+  scale: number,
+): Point[] {
   return points.map((point) => scalePointAroundCenter(point, center, scale));
 }
 
@@ -83,13 +104,13 @@ export function scalePointsAroundCenter(points, center, scale) {
  * @param {Array} points - Array of points with x and y coordinates
  * @returns {Object} Center point with x and y
  */
-export function calculateCenterPoint(points) {
+export function calculateCenterPoint(points: Point[]): Point {
   if (!points || points.length === 0) {
     return { x: 0, y: 0 };
   }
 
-  const sumX = points.reduce((sum, p) => sum + p.x, 0);
-  const sumY = points.reduce((sum, p) => sum + p.y, 0);
+  const sumX = points.reduce((sum: number, p: Point) => sum + p.x, 0);
+  const sumY = points.reduce((sum: number, p: Point) => sum + p.y, 0);
 
   return {
     x: sumX / points.length,
@@ -104,7 +125,11 @@ export function calculateCenterPoint(points) {
  * @param {number} scale - Scale factor for zoom
  * @returns {Object} New viewBox position with x and y
  */
-export function calculateZoomToPoint(currentViewBox, zoomPoint, scale) {
+export function calculateZoomToPoint(
+  currentViewBox: ViewBox,
+  zoomPoint: Point,
+  scale: number,
+): Point {
   const newX = currentViewBox.x + (zoomPoint.x - currentViewBox.x) * (1 - scale);
   const newY = currentViewBox.y + (zoomPoint.y - currentViewBox.y) * (1 - scale);
 
@@ -116,7 +141,7 @@ export function calculateZoomToPoint(currentViewBox, zoomPoint, scale) {
  * @param {TouchList} touches - Touch list with at least 2 touches
  * @returns {number|null} Distance between touches, or null if less than 2 touches
  */
-export function getTouchDistance(touches) {
+export function getTouchDistance(touches: TouchPoints): number | null {
   if (touches.length < 2) return null;
 
   const dx = touches[0].clientX - touches[1].clientX;
@@ -130,7 +155,7 @@ export function getTouchDistance(touches) {
  * @param {TouchList} touches - Touch list with at least 2 touches
  * @returns {Object|null} Center point with x and y, or null if less than 2 touches
  */
-export function getTouchCenter(touches) {
+export function getTouchCenter(touches: TouchPoints): Point | null {
   if (touches.length < 2) return null;
 
   return {

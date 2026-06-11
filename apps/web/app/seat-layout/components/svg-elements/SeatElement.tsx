@@ -13,22 +13,9 @@
  */
 
 import React, { useCallback } from "react";
+import type { RendererSeat } from "../../types.ts";
 
 export const SeatElement = React.memo(function SeatElement(
-  /**
-   * @type {{
-   *   seat: any,
-   *   seatId: any,
-   *   seatColor: string,
-   *   darkColor: string,
-   *   isSelected: boolean,
-   *   isDisabled: boolean,
-   *   seatOpacity: number,
-   *   onSeatClick: (seatId: any, seat: any) => void,
-   *   onMouseEnter: (seat: any) => void,
-   *   onMouseLeave: (value: any) => void,
-   * }}
-   */
   {
     seat,
     seatId,
@@ -40,7 +27,18 @@ export const SeatElement = React.memo(function SeatElement(
     onSeatClick,
     onMouseEnter,
     onMouseLeave,
-  }: any,
+  }: {
+    seat: RendererSeat;
+    seatId: string;
+    seatColor: string;
+    darkColor: string;
+    isSelected: boolean;
+    isDisabled: boolean;
+    seatOpacity: number;
+    onSeatClick: (seatId: string, seat: RendererSeat) => void;
+    onMouseEnter: (seat: RendererSeat) => void;
+    onMouseLeave: (value: null) => void;
+  },
 ) {
   const { position, dimensions } = seat;
 
@@ -52,7 +50,7 @@ export const SeatElement = React.memo(function SeatElement(
   const seatRadius = Math.min(seatWidth / 2, seatHeight / 2);
 
   const handleTouchStart = useCallback(
-    (e) => {
+    (e: React.TouchEvent<SVGGElement>) => {
       if (!isDisabled) {
         e.stopPropagation();
       }
@@ -61,7 +59,7 @@ export const SeatElement = React.memo(function SeatElement(
   );
 
   const handleTouchEnd = useCallback(
-    (e) => {
+    (e: React.TouchEvent<SVGGElement>) => {
       if (!isDisabled) {
         e.stopPropagation();
         e.preventDefault();

@@ -1,9 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
+import type { ChangeEvent, FocusEvent, ReactNode } from "react";
 
-/**
- * @param {{ title?: any, children?: any, isOpen?: boolean }} props
- */
-export const PropertySection = ({ title, children, isOpen = true }: any) => {
+export type FieldValue = string | number;
+
+type PropertySectionProps = {
+  title?: ReactNode;
+  children?: ReactNode;
+  isOpen?: boolean;
+};
+
+export const PropertySection = ({
+  title: _title,
+  children,
+  isOpen: _isOpen = true,
+}: PropertySectionProps) => {
   return (
     <div className="p-4">
       <div className="">{children}</div>
@@ -11,9 +21,21 @@ export const PropertySection = ({ title, children, isOpen = true }: any) => {
   );
 };
 
-/**
- * @param {{ label?: any, value?: any, onChange?: Function, onBlur?: Function, type?: string, min?: number|string, max?: number|string, step?: number|string, placeholder?: string, disabled?: boolean, title?: string, className?: string }} props
- */
+type InputFieldProps = {
+  label?: ReactNode;
+  value?: FieldValue | null;
+  onChange?: (value: FieldValue) => void;
+  onBlur?: (value: FieldValue) => void;
+  type?: string;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
+  placeholder?: string;
+  disabled?: boolean;
+  title?: string;
+  className?: string;
+};
+
 export const InputField = ({
   label,
   value,
@@ -25,10 +47,10 @@ export const InputField = ({
   step,
   placeholder,
   disabled = false,
-}: any) => {
+}: InputFieldProps) => {
   const [localValue, setLocalValue] = useState(value);
   const [isFocused, setIsFocused] = useState(false);
-  const debounceTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Update local value when prop value changes and input is not focused
   useEffect(() => {
@@ -46,7 +68,7 @@ export const InputField = ({
     };
   }, []);
 
-  const handleChange = (newValue) => {
+  const handleChange = (newValue: string) => {
     setLocalValue(newValue);
 
     // Clear existing timer
@@ -68,7 +90,7 @@ export const InputField = ({
     }
   };
 
-  const handleBlur = (currentValue) => {
+  const handleBlur = (currentValue: string) => {
     setIsFocused(false);
 
     // Clear any pending debounced update
@@ -103,15 +125,15 @@ export const InputField = ({
     }
   };
 
-  const handleFocus = (e) => {
+  const handleFocus = (e: FocusEvent<HTMLInputElement>) => {
     setIsFocused(true);
     e.target.select();
   };
 
   // Check if current value is out of range (for visual feedback)
   const isOutOfRange = type === "number" && isFocused && (
-    (min !== undefined && parseFloat(localValue) < Number(min)) ||
-    (max !== undefined && parseFloat(localValue) > Number(max))
+    (min !== undefined && parseFloat(String(localValue)) < Number(min)) ||
+    (max !== undefined && parseFloat(String(localValue)) > Number(max))
   );
 
   return (
@@ -143,17 +165,32 @@ export const InputField = ({
   );
 };
 
-/**
- * @param {{ label?: any, value?: any, onChange?: Function, options?: Array<{ value: any, label: string }> }} props
- */
-export const SelectField = ({ label, value, onChange, options }: any) => {
+type SelectOption = { value: FieldValue; label: string };
+
+type SelectFieldProps = {
+  label?: ReactNode;
+  value?: FieldValue | null;
+  onChange?: (value: FieldValue) => void;
+  options?: SelectOption[];
+};
+
+export const SelectField = ({
+  label,
+  value,
+  onChange,
+  options,
+}: SelectFieldProps) => {
   const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
   // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        event.target instanceof Node &&
+        !dropdownRef.current.contains(event.target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -163,7 +200,7 @@ export const SelectField = ({ label, value, onChange, options }: any) => {
   }, []);
 
   // Extract color and text from label (format: "Text (#HEXCODE)")
-  const parseLabel = (labelText) => {
+  const parseLabel = (labelText: string): { text: string; color: string | null } => {
     const hexMatch = labelText.match(/\(#[0-9A-Fa-f]{6}\)$/);
     if (hexMatch) {
       const hexCode = hexMatch[0].slice(1, -1); // Remove parentheses
@@ -260,11 +297,14 @@ export const SelectField = ({ label, value, onChange, options }: any) => {
   );
 };
 
-/**
- * @param {{ label?: any, value?: any, onChange?: Function }} props
- */
-export const ColorPicker = ({ label, value, onChange }: any) => {
-  const rgbToHex = (rgb) => {
+type ColorPickerProps = {
+  label?: ReactNode;
+  value?: string | null;
+  onChange?: (value: string) => void;
+};
+
+export const ColorPicker = ({ label, value, onChange }: ColorPickerProps) => {
+  const rgbToHex = (rgb: string): string => {
     if (!rgb) return "#000000";
     if (rgb.startsWith("#")) return rgb.toUpperCase();
 
@@ -285,7 +325,7 @@ export const ColorPicker = ({ label, value, onChange }: any) => {
     setHexInput(hexValue);
   }, [hexValue]);
 
-  const handleHexChange = (e) => {
+  const handleHexChange = (e: ChangeEvent<HTMLInputElement>) => {
     const input = e.target.value;
     setHexInput(input);
 
@@ -294,7 +334,7 @@ export const ColorPicker = ({ label, value, onChange }: any) => {
     }
   };
 
-  const handleColorChange = (e) => {
+  const handleColorChange = (e: ChangeEvent<HTMLInputElement>) => {
     onChange?.(e.target.value.toUpperCase());
   };
 

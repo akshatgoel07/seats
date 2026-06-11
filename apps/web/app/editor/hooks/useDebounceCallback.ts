@@ -4,8 +4,11 @@ import { useRef, useCallback, useEffect } from "react";
  * Hook to debounce a callback function and track when to commit to history
  * Useful for property updates that should batch into a single undo action
  */
-export function useDebounceCallback(callback, delay = 500) {
-  const timeoutRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+export function useDebounceCallback<TArgs extends unknown[]>(
+  callback: (...args: TArgs) => void,
+  delay = 500,
+): [(...args: TArgs) => void, () => void] {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRef = useRef(false);
 
   useEffect(() => {
@@ -17,7 +20,7 @@ export function useDebounceCallback(callback, delay = 500) {
   }, []);
 
   const debouncedCallback = useCallback(
-    (...args) => {
+    (...args: TArgs) => {
       // Clear existing timeout
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);

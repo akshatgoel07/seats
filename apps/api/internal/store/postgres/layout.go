@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,7 +30,7 @@ func scanLayout(row interface{ Scan(...any) error }) (domain.Layout, error) {
 
 func (s *LayoutStore) CreateLayout(ctx context.Context, venueID, name string) (domain.Layout, error) {
 	row := s.db.QueryRowContext(ctx,
-		`INSERT INTO layouts (venue_id, name, scene) VALUES ($1, $2, '{}'::jsonb)
+		`INSERT INTO layouts (venue_id, name, scene) VALUES ($1, $2, '{}')
 		 RETURNING `+layoutCols, venueID, name)
 	l, err := scanLayout(row)
 	if err != nil {
@@ -48,6 +49,48 @@ func (s *LayoutStore) GetLayout(ctx context.Context, id string) (domain.Layout, 
 		return domain.Layout{}, fmt.Errorf("get layout: %w", err)
 	}
 	return l, nil
+}
+
+// Exists reports whether a layout exists without reading the (large) scene.
+func (s *LayoutStore) Exists(ctx context.Context, id string) (bool, error) {
+	var ok bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM layouts WHERE id = $1)`, id).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("layout exists: %w", err)
+	}
+	return ok, nil
+}
+
+// GetVersion returns the layout's version (cache validator) without the scene.
+func (s *LayoutStore) GetVersion(ctx context.Context, id string) (int, error) {
+	var v int
+	err := s.db.QueryRowContext(ctx, `SELECT version FROM layouts WHERE id = $1`, id).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, store.ErrNotFound
+	}
+	if err != nil {
+		return 0, fmt.Errorf("get layout version: %w", err)
+	}
+	return v, nil
+}
+
+// ListSeatsJSON builds the flat-seat array as JSON in Postgres (json_agg) so the
+// read path avoids per-row Scan + Go marshal of tens of thousands of structs.
+// Column aliases match the FlatSeat json tags exactly.
+func (s *LayoutStore) ListSeatsJSON(ctx context.Context, layoutID string) (json.RawMessage, error) {
+	var raw []byte
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
+		   SELECT seat_uid AS "seatUid", label, row_label AS "rowLabel",
+		          row_num AS "rowNum", col_num AS "colNum", category_id AS "categoryId",
+		          x, y, w AS "width", h AS "height", is_standing AS "isStanding",
+		          standing_section_id AS "standingSectionId"
+		   FROM seats WHERE layout_id = $1 ORDER BY row_num, col_num
+		 ) t`, layoutID).Scan(&raw)
+	if err != nil {
+		return nil, fmt.Errorf("list seats json: %w", err)
+	}
+	return json.RawMessage(raw), nil
 }
 
 func (s *LayoutStore) ListLayouts(ctx context.Context, venueID string, limit, offset int) ([]domain.Layout, error) {
@@ -80,7 +123,7 @@ func (s *LayoutStore) SaveScene(ctx context.Context, id string, scene []byte, se
 	defer func() { _ = tx.Rollback() }()
 
 	row := tx.QueryRowContext(ctx,
-		`UPDATE layouts SET scene = $2::jsonb, row_count = $3, col_count = $4,
+		`UPDATE layouts SET scene = $2, row_count = $3, col_count = $4,
 		        version = version + 1, updated_at = now()
 		 WHERE id = $1
 		 RETURNING `+layoutCols, id, scene, rowCount, colCount)
@@ -89,7 +132,7 @@ func (s *LayoutStore) SaveScene(ctx context.Context, id string, scene []byte, se
 		return domain.Layout{}, store.ErrNotFound
 	}
 	if err != nil {
-		return domain.Layout{}, fmt.Errorf("save scene: %w", err)
+		return domain.Layout{}, classifyPgError(fmt.Errorf("save scene: %w", err))
 	}
 
 	// Replace flattened seats wholesale (simplest correct approach; layouts are
@@ -99,7 +142,7 @@ func (s *LayoutStore) SaveScene(ctx context.Context, id string, scene []byte, se
 	}
 	if len(seats) > 0 {
 		if err := insertSeats(ctx, tx, id, seats); err != nil {
-			return domain.Layout{}, err
+			return domain.Layout{}, classifyPgError(err)
 		}
 	}
 
@@ -175,7 +218,7 @@ func (s *LayoutStore) ListSeats(ctx context.Context, layoutID string) ([]domain.
 	}
 	defer rows.Close()
 
-	var out []domain.FlatSeat
+	out := make([]domain.FlatSeat, 0, 1024)
 	for rows.Next() {
 		var s domain.FlatSeat
 		if err := rows.Scan(&s.SeatUID, &s.Label, &s.RowLabel, &s.RowNum, &s.ColNum, &s.CategoryID, &s.X, &s.Y, &s.Width, &s.Height, &s.IsStanding, &s.StandingSectionID); err != nil {

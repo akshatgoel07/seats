@@ -15,12 +15,12 @@ export const TOOL_TYPES = {
   PAN: "pan",
   IMAGE_UPLOAD: "image-upload",
   MEASURE: "measure",
-};
+} as const;
 
 export const GEOMETRY_TYPES = {
   LINE: "line",
   ARC: "arc",
-};
+} as const;
 
 export const ELEMENT_TYPES = {
   CIRCLE: "circle",
@@ -31,7 +31,166 @@ export const ELEMENT_TYPES = {
   STANDING_SECTION: "standing-section",
   SEATING_SECTION: "seating-section",
   SECTION_BOUNDARY: "section-boundary",
-};
+} as const;
+
+export type Point = { x: number; y: number };
+
+export type EditorGeometry =
+  | { kind: "line"; p1: Point; p2: Point }
+  | {
+      kind: "arc";
+      center: Point;
+      radiusX: number;
+      radiusY: number;
+      startAngle: number;
+      endAngle: number;
+      radius?: number;
+    };
+
+export interface EditorCategory {
+  id: string;
+  name: string;
+  color: string;
+  price: number;
+  screen_seat_type_id?: number | string;
+  is_open_seating_area?: string;
+  sst_no_of_seats?: number;
+  [key: string]: unknown;
+}
+
+export interface APISeatType {
+  sst_id: number | string;
+  sst_seat_type?: string;
+  sst_seat_color_code?: string;
+  is_open_seating_area?: string;
+  sst_no_of_seats?: number;
+  [key: string]: unknown;
+}
+
+export type CurveHandles = Record<number, { cp1?: Point; cp2?: Point }>;
+
+export interface EditorVenue {
+  id: string;
+  name: string;
+  sections: string[];
+  categories: EditorCategory[];
+}
+
+export interface EditorSection {
+  id: string;
+  name: string;
+  categoryId: string;
+  rows?: string[];
+  transform: { x: number; y: number; rotation: number };
+  pathElementId?: string | null;
+  isClosed?: boolean;
+  showAsSolid?: boolean;
+  zoomThreshold?: number;
+}
+
+export interface EditorRow {
+  id: string;
+  sectionId: string;
+  geometry: EditorGeometry;
+  seatCount: number;
+  spacing: number;
+  rowSpacing?: number;
+  categoryId: string;
+  curve: number;
+  transform: { x: number; y: number; rotation: number };
+}
+
+export interface EditorSeat {
+  id: string;
+  rowId: string | null;
+  localX: number;
+  localY: number;
+  width: number;
+  height: number;
+  radius: number;
+  label: string;
+  categoryId: string;
+  isAvailable: boolean;
+}
+
+export interface EditorElement {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation?: number;
+  fillColor?: string;
+  strokeColor?: string;
+  strokeWidth?: number;
+  opacity?: number;
+  label?: string;
+  radius?: number;
+  points?: Point[];
+  curveHandles?: CurveHandles;
+  text?: string;
+  fontSize?: number;
+  fontFamily?: string;
+  fontWeight?: string;
+  textAlign?: string;
+  src?: string;
+  imageWidth?: number;
+  imageHeight?: number;
+  locked?: boolean;
+  borderRadius?: number;
+  standingCapacity?: number;
+  sectionType?: string;
+  entryPoints?: Point[];
+  exitPoints?: Point[];
+  apiData?: APISeatType;
+  backgroundImage?: string | null;
+  backgroundImageWidth?: number | null;
+  backgroundImageHeight?: number | null;
+  sectionName?: string;
+  categoryId?: string;
+  showAsSolid?: boolean;
+  zoomThreshold?: number;
+  pathElementId?: string;
+  pathBoundary?: { points: Point[]; curveHandles?: CurveHandles };
+  isClosed?: boolean;
+  scale?: number;
+  [key: string]: unknown;
+}
+
+export interface EditorScene {
+  venue: EditorVenue;
+  sections: Record<string, EditorSection>;
+  rows: Record<string, EditorRow>;
+  seats: Record<string, EditorSeat>;
+  elements: Record<string, EditorElement>;
+  view: { scale: number; tx: number; ty: number };
+  showSectionBoundaryInRenderer?: boolean;
+}
+
+export interface EditorState {
+  currentTool: string;
+  selectedIds: string[];
+  scene: EditorScene;
+  isGridVisible: boolean;
+  history: {
+    past: EditorScene[];
+    present: EditorScene;
+    future: EditorScene[];
+  };
+  clipboard: {
+    rows: EditorRow[];
+    seats: EditorSeat[];
+    elements: EditorElement[];
+    isEmpty: boolean;
+  };
+  pathCompletionRequested: boolean;
+  drawingCancelled: boolean;
+  globalSettings: ReturnType<typeof createGlobalSettings>;
+  toolSettings: Record<string, Record<string, unknown>>;
+}
+
+type ElementProperties = Partial<EditorElement> & Record<string, unknown>;
 
 // Create a unique ID
 export function generateId() {
@@ -39,7 +198,9 @@ export function generateId() {
 }
 
 // Utility functions for dynamic category mapping
-export function createDynamicCategories(seatTypes) {
+export function createDynamicCategories(
+  seatTypes: APISeatType[],
+): EditorCategory[] {
   return seatTypes.map((seatType) => ({
     id: seatType.sst_id.toString(),
     name: seatType.sst_seat_type || `Seat Type ${seatType.sst_id}`,
@@ -53,7 +214,9 @@ export function createDynamicCategories(seatTypes) {
 }
 
 // Create standing section from API data
-export function createStandingSectionFromAPI(apiStandingSection) {
+export function createStandingSectionFromAPI(
+  apiStandingSection: APISeatType,
+): EditorElement {
   return createElement(
     ELEMENT_TYPES.STANDING_SECTION,
     0, // Will be set when placed
@@ -76,18 +239,24 @@ export function createStandingSectionFromAPI(apiStandingSection) {
   );
 }
 
-export function mapSeatTypeToCategory(seatTypeId, categories) {
+export function mapSeatTypeToCategory(
+  seatTypeId: number | string,
+  categories: EditorCategory[],
+): string {
   const category = categories.find(
     (cat) => cat.screen_seat_type_id === seatTypeId,
   );
   return category ? category.id : "default";
 }
 
-export function getCategoryById(categoryId, categories) {
+export function getCategoryById(
+  categoryId: string,
+  categories: EditorCategory[],
+): EditorCategory | null {
   return categories.find((cat) => cat.id === categoryId) || null;
 }
 
-function generateCategoryColor(seatTypeId) {
+function generateCategoryColor(seatTypeId: number | string): string {
   // Generate consistent colors based on seat type ID
   const colors = [
     "#4a90e2", // Blue
@@ -107,11 +276,14 @@ function generateCategoryColor(seatTypeId) {
     "#00cec9", // Cyan
   ];
 
-  return colors[seatTypeId % colors.length];
+  return colors[Number(seatTypeId) % colors.length];
 }
 
 // Venue structure
-export function createVenue(name = "New Venue", categories = []) {
+export function createVenue(
+  name = "New Venue",
+  categories: EditorCategory[] = [],
+): EditorVenue {
   return {
     id: generateId(),
     name,
@@ -131,7 +303,10 @@ export function createVenue(name = "New Venue", categories = []) {
 }
 
 // Section structure
-export function createSection(name = "New Section", categoryId = "default") {
+export function createSection(
+  name = "New Section",
+  categoryId = "default",
+): EditorSection {
   return {
     id: generateId(),
     name,
@@ -149,8 +324,8 @@ export function createSection(name = "New Section", categoryId = "default") {
 export function createSectionBoundary(
   name = "New Section",
   categoryId = "default",
-  pathElement = /** @type {{ id?: any } | null} */ (null),
-) {
+  pathElement: { id?: string } | null = null,
+): EditorSection {
   return {
     id: generateId(),
     name,
@@ -169,13 +344,13 @@ export function createSectionBoundary(
 
 // Row structure
 export function createRow(
-  sectionId,
-  geometry,
+  sectionId: string,
+  geometry: EditorGeometry,
   seatCount = 10,
   spacing = 40,
   categoryId = "default",
   curve = 0,
-) {
+): EditorRow {
   return {
     id: generateId(),
     sectionId,
@@ -194,14 +369,14 @@ export function createRow(
 
 // Seat structure
 export function createSeat(
-  rowId,
-  localX,
-  localY,
+  rowId: string | null,
+  localX: number,
+  localY: number,
   label = "",
   categoryId = "default",
   width = 20,
   height = 20,
-) {
+): EditorSeat {
   return {
     id: generateId(),
     rowId,
@@ -217,7 +392,7 @@ export function createSeat(
 }
 
 // View state
-export function createViewState() {
+export function createViewState(): EditorScene["view"] {
   return {
     scale: 1.0,
     tx: 400, // Translation X
@@ -227,13 +402,13 @@ export function createViewState() {
 
 // Element structure for layout elements like tables, paths, etc.
 export function createElement(
-  type,
-  x,
-  y,
+  type: string,
+  x: number,
+  y: number,
   width = 50,
   height = 50,
-  properties: any = {},
-) {
+  properties: ElementProperties = {},
+): EditorElement {
   const baseElement = {
     id: generateId(),
     type,
@@ -359,7 +534,7 @@ export function createElement(
 }
 
 // Scene structure (contains all venue data)
-export function createScene(categories = []) {
+export function createScene(categories: EditorCategory[] = []): EditorScene {
   const venue = createVenue("Opera House", categories);
 
   return {
@@ -373,7 +548,7 @@ export function createScene(categories = []) {
 }
 
 // Global default settings for seat layout
-export function createGlobalSettings(firstCategoryId = null) {
+export function createGlobalSettings(firstCategoryId: string | null = null) {
   return {
     seatWidth: 20,
     seatHeight: 20,
@@ -389,7 +564,7 @@ export function createGlobalSettings(firstCategoryId = null) {
   };
 }
 
-export function createToolSettings() {
+export function createToolSettings(): Record<string, Record<string, unknown>> {
   return {
     [TOOL_TYPES.ELEMENT_TEXT]: {
       text: "Text",
@@ -415,11 +590,6 @@ export function createToolSettings() {
       strokeWidth: 2,
       rotation: 0,
       borderRadius: 8,
-    },
-    [TOOL_TYPES.ELEMENT_PATH]: {
-      strokeColor: "rgba(0, 0, 0, 0.9)",
-      strokeWidth: 2,
-      opacity: 1.0,
     },
     [TOOL_TYPES.SEAT]: {
       categoryId: "default",
@@ -482,7 +652,9 @@ export function createToolSettings() {
 }
 
 // Editor state
-export function createDefaultEditorState(categories = []) {
+export function createDefaultEditorState(
+  categories: EditorCategory[] = [],
+): EditorState {
   const scene = createScene(categories);
 
   // Add a default section
@@ -517,7 +689,12 @@ export function createDefaultEditorState(categories = []) {
 }
 
 // Geometry helpers
-export function createLineGeometry(x1, y1, x2, y2) {
+export function createLineGeometry(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+): EditorGeometry {
   return {
     kind: GEOMETRY_TYPES.LINE,
     p1: { x: x1, y: y1 },
@@ -526,13 +703,13 @@ export function createLineGeometry(x1, y1, x2, y2) {
 }
 
 export function createArcGeometry(
-  centerX,
-  centerY,
-  radiusX,
-  radiusY,
-  startAngle,
-  endAngle,
-) {
+  centerX: number,
+  centerY: number,
+  radiusX: number,
+  radiusY: number,
+  startAngle: number,
+  endAngle: number,
+): EditorGeometry {
   return {
     kind: GEOMETRY_TYPES.ARC,
     center: { x: centerX, y: centerY },
@@ -545,12 +722,12 @@ export function createArcGeometry(
 
 // Backward compatibility - create circular arc
 export function createCircularArcGeometry(
-  centerX,
-  centerY,
-  radius,
-  startAngle,
-  endAngle,
-) {
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+): EditorGeometry {
   return createArcGeometry(
     centerX,
     centerY,
@@ -562,7 +739,7 @@ export function createCircularArcGeometry(
 }
 
 // Utility functions
-export function getRowLength(geometry) {
+export function getRowLength(geometry: EditorGeometry): number {
   if (geometry.kind === GEOMETRY_TYPES.LINE) {
     const dx = geometry.p2.x - geometry.p1.x;
     const dy = geometry.p2.y - geometry.p1.y;
@@ -576,7 +753,7 @@ export function getRowLength(geometry) {
   return 0;
 }
 
-export function getRowDirection(geometry) {
+export function getRowDirection(geometry: EditorGeometry): number {
   if (geometry.kind === GEOMETRY_TYPES.LINE) {
     const dx = geometry.p2.x - geometry.p1.x;
     const dy = geometry.p2.y - geometry.p1.y;
@@ -588,7 +765,7 @@ export function getRowDirection(geometry) {
   return 0;
 }
 
-export function getPointOnRow(geometry, t) {
+export function getPointOnRow(geometry: EditorGeometry, t: number): Point {
   // t is between 0 and 1, representing position along the row
   if (geometry.kind === GEOMETRY_TYPES.LINE) {
     const { p1, p2 } = geometry;
@@ -608,7 +785,7 @@ export function getPointOnRow(geometry, t) {
 }
 
 // Get aspect ratio of elliptical arc (major/minor axis ratio)
-export function getArcAspectRatio(geometry) {
+export function getArcAspectRatio(geometry: EditorGeometry): number {
   if (geometry.kind === GEOMETRY_TYPES.ARC) {
     return geometry.radiusX / geometry.radiusY;
   }
@@ -616,7 +793,7 @@ export function getArcAspectRatio(geometry) {
 }
 
 // Migrate old arc geometry to new format (handles legacy data with single radius)
-export function migrateArcGeometry(geometry) {
+export function migrateArcGeometry(geometry: EditorGeometry): EditorGeometry {
   if (geometry.kind === GEOMETRY_TYPES.ARC) {
     // If it has the old single radius property, convert to elliptical
     if (geometry.radius && !geometry.radiusX) {
@@ -629,7 +806,10 @@ export function migrateArcGeometry(geometry) {
 }
 
 // Table labeling utility functions
-export function generateTableLabel(rowIndex, columnIndex) {
+export function generateTableLabel(
+  rowIndex: number,
+  columnIndex: number,
+): string {
   // Convert row index (0-based) to letter (A, B, C, etc.)
   const rowLetter = String.fromCharCode(65 + rowIndex);
 
@@ -639,7 +819,10 @@ export function generateTableLabel(rowIndex, columnIndex) {
   return `${rowLetter}-${columnNumber}`;
 }
 
-export function parseTableLabel(label) {
+export function parseTableLabel(label: string): {
+  rowIndex: number;
+  columnIndex: number;
+} {
   // Parse label like "A-1", "B-2" back to row/column indices
   if (!label || typeof label !== "string" || label.length < 3) {
     return { rowIndex: 0, columnIndex: 0 };
@@ -663,7 +846,24 @@ export function parseTableLabel(label) {
   };
 }
 
-export function detectTableGrid(elements) {
+type TableGridCell = {
+  rowIndex: number;
+  colIndex: number;
+  x: number;
+  y: number;
+  tables: EditorElement[];
+  label: string;
+};
+
+type TableGridInfo = {
+  rows: number;
+  columns: number;
+  grid: TableGridCell[];
+};
+
+export function detectTableGrid(
+  elements: Record<string, EditorElement>,
+): TableGridInfo {
   console.log("Filtering table elements (circles)...");
   const tables = Object.values(elements).filter(
     (element) => element.type === ELEMENT_TYPES.CIRCLE,
@@ -676,7 +876,7 @@ export function detectTableGrid(elements) {
   }
 
   console.log("Grouping tables by Y positions (rows)...", tables);
-  const rowGroups = {};
+  const rowGroups: Record<number, EditorElement[]> = {};
   tables.forEach((table) => {
     const y = Math.floor(table.y / 50 + 0.5) * 50;
 
@@ -696,9 +896,9 @@ export function detectTableGrid(elements) {
   console.log("Processing each row to group by X positions (columns)...");
   const grid = sortedYPositions.map((y, rowIndex) => {
     console.log(`Processing row ${rowIndex} at y=${y}`);
-    const rowTables = rowGroups[y];
+    const rowTables = rowGroups[y] || [];
 
-    const columnGroups = {};
+    const columnGroups: Record<number, EditorElement[]> = {};
     rowTables.forEach((table) => {
       const x = Math.round(table.x / 50) * 50;
       console.log(`Table at x=${table.x} rounded to x=${x}`);
@@ -717,7 +917,7 @@ export function detectTableGrid(elements) {
 
     return sortedXPositions.map((x, colIndex) => {
       console.log(`Processing cell at row ${rowIndex}, col ${colIndex}`);
-      const colTables = columnGroups[x];
+      const colTables = columnGroups[x] || [];
 
       console.log(`Updating labels for ${colTables.length} tables in cell`);
       colTables.forEach((table) => {
@@ -744,7 +944,11 @@ export function detectTableGrid(elements) {
     grid: grid.flat(),
   };
 }
-export function assignTableLabelsToGrid(elements, seats = {}) {
+
+export function assignTableLabelsToGrid(
+  elements: Record<string, EditorElement>,
+  seats: Record<string, EditorSeat> = {},
+): TableGridInfo {
   const gridInfo = detectTableGrid(elements);
 
   // Update all table labels in the elements object
@@ -794,7 +998,9 @@ export function assignTableLabelsToGrid(elements, seats = {}) {
   return gridInfo;
 }
 
-export function getNextTableLabel(elements) {
+export function getNextTableLabel(
+  elements: Record<string, EditorElement>,
+): string {
   const gridInfo = detectTableGrid(elements);
 
   if (gridInfo.grid.length === 0) {
@@ -818,7 +1024,11 @@ export function getNextTableLabel(elements) {
 }
 
 // Test utility to verify dynamic category integration
-export function testDynamicCategoryIntegration() {
+export function testDynamicCategoryIntegration(): {
+  dynamicCategories: EditorCategory[];
+  mappedCategoryId: string;
+  category: EditorCategory | null;
+} {
   // Mock seat types data (similar to API response)
   const mockSeatTypes = [
     {

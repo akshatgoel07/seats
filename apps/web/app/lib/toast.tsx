@@ -28,7 +28,7 @@ function BellIcon() {
   );
 }
 
-export function showToast(message, description) {
+export function showToast(message: string, description?: string) {
   toast.error(message, {
     description: description,
     duration: 5000,

@@ -2,11 +2,19 @@
 
 import React, { useState, useRef, useLayoutEffect } from "react";
 
-const Tooltip = ({ children, content, position = "right" }) => {
+type TooltipPosition = "right" | "left" | "top" | "bottom";
+
+type TooltipProps = {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  position?: TooltipPosition;
+};
+
+const Tooltip = ({ children, content, position = "right" }: TooltipProps) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [tooltipStyle, setTooltipStyle] = useState(/** @type {Record<string, any>} */ ({}));
-  const triggerRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const tooltipRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+  const tooltipRef = useRef<HTMLDivElement | null>(null);
 
   // Measure the trigger/tooltip rects and position the tooltip before the
   // browser paints. useLayoutEffect (not useEffect) runs synchronously after
@@ -16,7 +24,7 @@ const Tooltip = ({ children, content, position = "right" }) => {
       const triggerRect = triggerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
 
-      let style = {};
+      let style: React.CSSProperties = {};
 
       switch (position) {
         case "right":

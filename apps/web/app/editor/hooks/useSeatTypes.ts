@@ -2,15 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { ApiService } from "@/services/api.ts";
+import type { SceneCategory } from "@/services/api.ts";
+
+type SeatType = {
+  sst_id: string;
+  sst_seat_type: string;
+  sst_seat_color_code: string;
+  sst_order: number;
+  is_open_seating_area: string;
+};
 
 // Loads the seat categories for a layout from the Go backend and adapts them to
 // the legacy `sst_*` shape the editor UI still expects. The route param is the
 // layoutId; categories live inside the layout's scene (venue.categories), which
 // is how the editor authors and persists them.
-export function useSeatTypes(layoutId) {
-  const [seatTypes, setSeatTypes] = useState(/** @type {any[]} */ ([]));
+export function useSeatTypes(layoutId: string | null | undefined) {
+  const [seatTypes, setSeatTypes] = useState<SeatType[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(/** @type {any} */ (null));
+  const [error, setError] = useState<unknown>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +43,7 @@ export function useSeatTypes(layoutId) {
         const categories = layout?.scene?.venue?.categories || [];
 
         // Adapt scene category -> legacy sst_* shape used by the editor UI.
-        const adapted = categories.map((c, i) => ({
+        const adapted = categories.map((c: SceneCategory, i: number) => ({
           sst_id: c.id,
           sst_seat_type: c.name,
           sst_seat_color_code: c.color,

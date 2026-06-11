@@ -1,11 +1,17 @@
 import React from "react";
 import { PropertySection } from "./UIComponents.tsx";
+import type { APISeatType, EditorScene } from "../../types.ts";
 
 export const SectionsPanel = ({
   scene,
   onCreateSection,
   standingSections = [],
   onCreateStandingSection,
+}: {
+  scene: EditorScene;
+  onCreateSection: () => void;
+  standingSections?: APISeatType[];
+  onCreateStandingSection: (section: APISeatType) => void;
 }) => {
   return (
     <PropertySection title="Sections & Standing Areas">

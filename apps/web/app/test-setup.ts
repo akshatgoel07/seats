@@ -31,17 +31,17 @@ Object.assign(globalThis, {
   afterEach,
 });
 
-function makeMatchers(actual, negated) {
-  const ok = (pass, message) => {
+function makeMatchers(actual: unknown, negated: boolean) {
+  const ok = (pass: boolean, message: string) => {
     if (negated ? pass : !pass) {
       assert.fail(message);
     }
   };
   return {
-    toBe(expected) {
+    toBe(expected: unknown) {
       ok(Object.is(actual, expected), `expected ${format(actual)} ${negated ? "not " : ""}to be ${format(expected)}`);
     },
-    toEqual(expected) {
+    toEqual(expected: unknown) {
       let equal = true;
       try {
         assert.deepStrictEqual(actual, expected);
@@ -50,27 +50,29 @@ function makeMatchers(actual, negated) {
       }
       ok(equal, `expected ${format(actual)} ${negated ? "not " : ""}to deeply equal ${format(expected)}`);
     },
-    toBeGreaterThan(expected) {
-      ok(actual > expected, `expected ${format(actual)} ${negated ? "not " : ""}to be > ${format(expected)}`);
+    toBeGreaterThan(expected: number) {
+      ok(Number(actual) > expected, `expected ${format(actual)} ${negated ? "not " : ""}to be > ${format(expected)}`);
     },
-    toBeGreaterThanOrEqual(expected) {
-      ok(actual >= expected, `expected ${format(actual)} ${negated ? "not " : ""}to be >= ${format(expected)}`);
+    toBeGreaterThanOrEqual(expected: number) {
+      ok(Number(actual) >= expected, `expected ${format(actual)} ${negated ? "not " : ""}to be >= ${format(expected)}`);
     },
-    toBeLessThan(expected) {
-      ok(actual < expected, `expected ${format(actual)} ${negated ? "not " : ""}to be < ${format(expected)}`);
+    toBeLessThan(expected: number) {
+      ok(Number(actual) < expected, `expected ${format(actual)} ${negated ? "not " : ""}to be < ${format(expected)}`);
     },
-    toBeLessThanOrEqual(expected) {
-      ok(actual <= expected, `expected ${format(actual)} ${negated ? "not " : ""}to be <= ${format(expected)}`);
+    toBeLessThanOrEqual(expected: number) {
+      ok(Number(actual) <= expected, `expected ${format(actual)} ${negated ? "not " : ""}to be <= ${format(expected)}`);
     },
-    toBeCloseTo(expected, precision = 2) {
+    toBeCloseTo(expected: number, precision = 2) {
       const tolerance = Math.pow(10, -precision) / 2;
-      ok(Math.abs(actual - expected) < tolerance, `expected ${format(actual)} ${negated ? "not " : ""}to be close to ${format(expected)}`);
+      ok(Math.abs(Number(actual) - expected) < tolerance, `expected ${format(actual)} ${negated ? "not " : ""}to be close to ${format(expected)}`);
     },
-    toContain(expected) {
-      ok(actual != null && actual.includes(expected), `expected ${format(actual)} ${negated ? "not " : ""}to contain ${format(expected)}`);
+    toContain(expected: unknown) {
+      const container = actual as { includes?: (value: unknown) => boolean } | null | undefined;
+      ok(Boolean(container?.includes?.(expected)), `expected ${format(actual)} ${negated ? "not " : ""}to contain ${format(expected)}`);
     },
-    toHaveLength(expected) {
-      ok(actual != null && actual.length === expected, `expected length ${actual?.length} ${negated ? "not " : ""}to be ${expected}`);
+    toHaveLength(expected: number) {
+      const sized = actual as { length?: number } | null | undefined;
+      ok(sized?.length === expected, `expected length ${sized?.length} ${negated ? "not " : ""}to be ${expected}`);
     },
     toBeTruthy() {
       ok(Boolean(actual), `expected ${format(actual)} ${negated ? "not " : ""}to be truthy`);
@@ -87,17 +89,17 @@ function makeMatchers(actual, negated) {
     toBeNull() {
       ok(actual === null, `expected ${format(actual)} ${negated ? "not " : ""}to be null`);
     },
-    toThrow(expected) {
+    toThrow(expected?: string) {
       let threw = false;
-      let error;
+      let error: unknown;
       try {
-        actual();
+        (actual as () => unknown)();
       } catch (e) {
         threw = true;
         error = e;
       }
       if (expected && threw) {
-        const msg = error?.message ?? String(error);
+        const msg = error instanceof Error ? error.message : String(error);
         ok(msg.includes(expected), `expected thrown message ${format(msg)} ${negated ? "not " : ""}to contain ${format(expected)}`);
         return;
       }
@@ -106,7 +108,7 @@ function makeMatchers(actual, negated) {
   };
 }
 
-function format(value) {
+function format(value: unknown): string {
   if (typeof value === "string") return JSON.stringify(value);
   if (typeof value === "bigint") return `${value}n`;
   try {
@@ -116,8 +118,10 @@ function format(value) {
   }
 }
 
-function expect(actual) {
-  const matchers: any = makeMatchers(actual, false);
+function expect(actual: unknown) {
+  const matchers = makeMatchers(actual, false) as ReturnType<typeof makeMatchers> & {
+    not: ReturnType<typeof makeMatchers>;
+  };
   matchers.not = makeMatchers(actual, true);
   return matchers;
 }

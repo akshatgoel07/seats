@@ -7,7 +7,28 @@ import {
   GEOMETRY_TYPES,
   createGlobalSettings,
 } from "./types.ts";
+import type { EditorGeometry, EditorRow, EditorSeat, Point } from "./types.ts";
 import { generateSeatLabel } from "./seatNaming.ts";
+
+type RowWithSeatSizing = Pick<
+  EditorRow,
+  "id" | "geometry" | "seatCount" | "spacing" | "categoryId"
+> &
+  Partial<Pick<EditorRow, "sectionId" | "curve" | "transform">> & {
+  seatWidth?: number;
+  seatHeight?: number;
+};
+
+type ArcLengthLUT = {
+  startAngle: number;
+  endAngle: number;
+  segmentAngle: number;
+  numSegments: number;
+  totalLength: number;
+  cumulative: number[];
+};
+
+type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
 /**
  * Generate seats along a row based on its geometry with optional curve effect
@@ -20,12 +41,12 @@ import { generateSeatLabel } from "./seatNaming.ts";
  * @param {number|null} rowIndex - Zero-based row index for generating labels (e.g., 0=A, 1=B, 26=AA)
  */
 export function generateSeatsForRow(
-  row,
-  globalSettings = null,
-  existingSeats = [],
-  rowIndex = null,
-) {
-  const seats = [];
+  row: RowWithSeatSizing,
+  globalSettings: ReturnType<typeof createGlobalSettings> | null = null,
+  existingSeats: EditorSeat[] = [],
+  rowIndex: number | null = null,
+): EditorSeat[] {
+  const seats: EditorSeat[] = [];
   const {
     geometry,
     seatCount,
@@ -52,7 +73,7 @@ export function generateSeatsForRow(
 
   // For curved rows, integrate the arc length ONCE into a lookup table instead
   // of re-integrating per seat (R15). seatSpacing/angles below read from it.
-  let arcLUT = null;
+  let arcLUT: ArcLengthLUT | null = null;
   let arcSeatSpacing = 0;
   if (geometry.kind === GEOMETRY_TYPES.ARC && seatCount > 1) {
     arcLUT = buildEllipticalArcLUT(
@@ -66,7 +87,9 @@ export function generateSeatsForRow(
 
   // Calculate seat positions
   for (let i = 0; i < seatCount; i++) {
-    let t, localX, localY;
+    let t = 0;
+    let localX = 0;
+    let localY = 0;
 
     if (geometry.kind === GEOMETRY_TYPES.LINE) {
       // For straight rows, distribute seats evenly along the line
@@ -90,7 +113,7 @@ export function generateSeatsForRow(
         localY = center.y + radiusY * Math.sin(midAngle);
       } else {
         // Distribute seats equidistantly along the arc using the prebuilt LUT.
-        const angle = angleAtArcLength(arcLUT, i * arcSeatSpacing);
+        const angle = angleAtArcLength(arcLUT as ArcLengthLUT, i * arcSeatSpacing);
 
         localX = center.x + radiusX * Math.cos(angle);
         localY = center.y + radiusY * Math.sin(angle);
@@ -103,7 +126,7 @@ export function generateSeatsForRow(
     // Positive values create upward curve, negative values create downward curve
     if (Math.abs(curve) > 0.001) {
       // Calculate position relative to center (0 = center, -1/1 = ends)
-      let centerOffset;
+      let centerOffset = 0;
       if (geometry.kind === GEOMETRY_TYPES.LINE) {
         centerOffset = /** @type {number} */ (t) - 0.5; // -0.5 to 0.5, where 0 is center
       } else if (geometry.kind === GEOMETRY_TYPES.ARC) {
@@ -173,12 +196,12 @@ export function generateSeatsForRow(
  * Calculate arc length along an elliptical arc from start angle to given angle
  */
 export function calculateEllipticalArcLength(
-  radiusX,
-  radiusY,
-  startAngle,
-  endAngle,
+  radiusX: number,
+  radiusY: number,
+  startAngle: number,
+  endAngle: number,
   numSegments = 100,
-) {
+): number {
   if (Math.abs(endAngle - startAngle) < 0.001) return 0;
 
   const angleSpan = endAngle - startAngle;
@@ -212,13 +235,13 @@ export function calculateEllipticalArcLength(
  * Find angle corresponding to a specific arc length along an elliptical arc
  */
 export function findAngleForArcLength(
-  radiusX,
-  radiusY,
-  startAngle,
-  endAngle,
-  targetLength,
+  radiusX: number,
+  radiusY: number,
+  startAngle: number,
+  endAngle: number,
+  targetLength: number,
   numSegments = 100,
-) {
+): number {
   if (targetLength <= 0) return startAngle;
   if (
     targetLength >=
@@ -280,15 +303,15 @@ export function findAngleForArcLength(
  * @returns {{ startAngle:number, endAngle:number, segmentAngle:number, numSegments:number, totalLength:number, cumulative:number[] }}
  */
 export function buildEllipticalArcLUT(
-  radiusX,
-  radiusY,
-  startAngle,
-  endAngle,
+  radiusX: number,
+  radiusY: number,
+  startAngle: number,
+  endAngle: number,
   numSegments = 100,
-) {
+): ArcLengthLUT {
   const angleSpan = endAngle - startAngle;
   const segmentAngle = angleSpan / numSegments;
-  const cumulative = new Array(numSegments + 1);
+  const cumulative = new Array<number>(numSegments + 1);
   cumulative[0] = 0;
   let totalLength = 0;
 
@@ -326,9 +349,18 @@ export function buildEllipticalArcLUT(
  * equivalent to findAngleForArcLength (same segments, same linear interpolation
  * within the containing segment) but O(log segments) instead of O(segments).
  */
-export function angleAtArcLength(lut, targetLength) {
-  const { startAngle, endAngle, segmentAngle, numSegments, totalLength, cumulative } =
-    lut;
+export function angleAtArcLength(
+  lut: ArcLengthLUT,
+  targetLength: number,
+): number {
+  const {
+    startAngle,
+    endAngle,
+    segmentAngle,
+    numSegments,
+    totalLength,
+    cumulative,
+  } = lut;
   if (targetLength <= 0) return startAngle;
   if (targetLength >= totalLength) return endAngle;
 
@@ -349,7 +381,7 @@ export function angleAtArcLength(lut, targetLength) {
 /**
  * Calculate the normal vector at a point on a row (for seat orientation)
  */
-export function getRowNormalAt(geometry, t) {
+export function getRowNormalAt(geometry: EditorGeometry, t: number): Point {
   if (geometry.kind === GEOMETRY_TYPES.LINE) {
     // For straight lines, normal is perpendicular to the line
     const dx = geometry.p2.x - geometry.p1.x;
@@ -381,7 +413,10 @@ export function getRowNormalAt(geometry, t) {
 /**
  * Calculate the normal vector at a specific arc length position on an elliptical arc
  */
-export function getEllipticalArcNormalAt(geometry, arcLength) {
+export function getEllipticalArcNormalAt(
+  geometry: EditorGeometry,
+  arcLength: number,
+): Point {
   if (geometry.kind !== GEOMETRY_TYPES.ARC) {
     return { x: 0, y: 1 };
   }
@@ -407,7 +442,7 @@ export function getEllipticalArcNormalAt(geometry, arcLength) {
 /**
  * Calculate bounding box for a set of points
  */
-export function calculateBounds(points) {
+export function calculateBounds(points: Point[]): Bounds {
   if (points.length === 0) {
     return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
   }
@@ -431,7 +466,14 @@ export function calculateBounds(points) {
 /**
  * Check if a point is inside a rectangle
  */
-export function pointInRect(px, py, rectX, rectY, rectWidth, rectHeight) {
+export function pointInRect(
+  px: number,
+  py: number,
+  rectX: number,
+  rectY: number,
+  rectWidth: number,
+  rectHeight: number,
+): boolean {
   return (
     px >= rectX &&
     px <= rectX + rectWidth &&
@@ -443,7 +485,7 @@ export function pointInRect(px, py, rectX, rectY, rectWidth, rectHeight) {
 /**
  * Calculate distance between two points
  */
-export function distance(p1, p2) {
+export function distance(p1: Point, p2: Point): number {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
   return Math.sqrt(dx * dx + dy * dy);
@@ -452,16 +494,16 @@ export function distance(p1, p2) {
 /**
  * Calculate the angle between two points
  */
-export function angle(p1, p2) {
+export function angle(p1: Point, p2: Point): number {
   return Math.atan2(p2.y - p1.y, p2.x - p1.x);
 }
 
 /**
  * Rotate a point around another point
  */
-export function rotatePoint(point, center, angle) {
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
+export function rotatePoint(point: Point, center: Point, angleValue: number): Point {
+  const cos = Math.cos(angleValue);
+  const sin = Math.sin(angleValue);
 
   const dx = point.x - center.x;
   const dy = point.y - center.y;
@@ -475,42 +517,42 @@ export function rotatePoint(point, center, angle) {
 /**
  * Linear interpolation between two values
  */
-export function lerp(a, b, t) {
+export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
 /**
  * Clamp a value between min and max
  */
-export function clamp(value, min, max) {
+export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
 /**
  * Convert degrees to radians
  */
-export function toRadians(degrees) {
+export function toRadians(degrees: number): number {
   return degrees * (Math.PI / 180);
 }
 
 /**
  * Convert radians to degrees
  */
-export function toDegrees(radians) {
+export function toDegrees(radians: number): number {
   return radians * (180 / Math.PI);
 }
 
 /**
  * Snap a value to a grid
  */
-export function snapToGrid(value, gridSize) {
+export function snapToGrid(value: number, gridSize: number): number {
   return Math.round(value / gridSize) * gridSize;
 }
 
 /**
  * Get the center point of a geometry
  */
-export function getGeometryCenter(geometry) {
+export function getGeometryCenter(geometry: EditorGeometry): Point {
   if (geometry.kind === GEOMETRY_TYPES.LINE) {
     return {
       x: (geometry.p1.x + geometry.p2.x) / 2,

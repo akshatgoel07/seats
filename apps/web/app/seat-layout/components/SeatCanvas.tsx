@@ -20,10 +20,18 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { isSeatDisabled, shouldApplyOpacityFilter } from "../utils/index.ts";
 import { querySeatAtPoint } from "../utils/spatialIndex.ts";
+import type {
+  Point,
+  RendererSeat,
+  SeatMap,
+  SeatSpatialIndex,
+  SeatType,
+  ViewBox,
+} from "../types.ts";
 
 const SIZE_FACTOR = 0.88;
 
-function viewToScreen(vb, W, H) {
+function viewToScreen(vb: ViewBox, W: number, H: number) {
   // Replicate SVG xMidYMid meet.
   const scale = Math.min(W / vb.width, H / vb.height);
   const offsetX = (W - vb.width * scale) / 2;
@@ -53,9 +61,30 @@ export function SeatCanvas({
   onViewportTouchStart,
   onViewportTouchMove,
   onViewportTouchEnd,
+}: {
+  seatMap: SeatMap;
+  spatialIndex: SeatSpatialIndex | null;
+  svgRef: React.RefObject<SVGSVGElement | null>;
+  viewBox: ViewBox;
+  viewBoxRef: React.RefObject<ViewBox>;
+  isDragging: boolean;
+  getSeatColor: (seat: RendererSeat) => string;
+  getDarkenedSeatColor: (seat: RendererSeat) => string;
+  isSeatSelected: (seatId: string) => boolean;
+  hoveredSeatId: string | null;
+  selectedLegendType: SeatType | null;
+  onSeatClick: (seatId: string, seat: RendererSeat) => void;
+  onHoverSeat: (value: { id: string; seat: RendererSeat } | null) => void;
+  onViewportMouseDown?: (event: React.MouseEvent<HTMLCanvasElement>) => void;
+  onViewportMouseMove?: (event: React.MouseEvent<HTMLCanvasElement>) => void;
+  onViewportMouseUp?: (event: React.MouseEvent<HTMLCanvasElement>) => void;
+  onViewportWheel?: (event: React.WheelEvent<HTMLCanvasElement>) => void;
+  onViewportTouchStart?: (event: React.TouchEvent<HTMLCanvasElement>) => void;
+  onViewportTouchMove?: (event: React.TouchEvent<HTMLCanvasElement>) => void;
+  onViewportTouchEnd?: (event: React.TouchEvent<HTMLCanvasElement>) => void;
 }) {
-  const canvasRef = useRef(/** @type {HTMLCanvasElement | null} */ (null));
-  const rafRef = useRef(/** @type {number | null} */ (null));
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const draw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -201,7 +230,7 @@ export function SeatCanvas({
   }, []);
 
   const screenToWorld = useCallback(
-    (clientX, clientY) => {
+    (clientX: number, clientY: number): Point | null => {
       const canvas = canvasRef.current;
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
@@ -220,7 +249,7 @@ export function SeatCanvas({
   );
 
   const handleMove = useCallback(
-    (e) => {
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
       if (onViewportMouseMove) onViewportMouseMove(e);
       if (isDragging) return; // skip hover hit-testing during a pan
       const world = screenToWorld(e.clientX, e.clientY);
@@ -232,7 +261,7 @@ export function SeatCanvas({
   );
 
   const handleClick = useCallback(
-    (e) => {
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
       const world = screenToWorld(e.clientX, e.clientY);
       if (!world) return;
       const seatId = querySeatAtPoint(spatialIndex, seatMap, world.x, world.y, SIZE_FACTOR);

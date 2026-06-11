@@ -4,8 +4,14 @@
  */
 
 import React from "react";
+import type { RendererElement } from "../../types.ts";
 
-export function ImageElement({ element, elementId }) {
+type ElementProps = {
+  element: RendererElement;
+  elementId: string;
+};
+
+export function ImageElement({ element, elementId }: ElementProps) {
   const scale = element.scale || 1.0;
 
   // Only render SVG images (background elements), not regular image files

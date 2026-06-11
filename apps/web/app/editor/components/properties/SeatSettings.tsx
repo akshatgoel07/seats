@@ -3,10 +3,23 @@
 import React from "react";
 import { SelectField } from "./UIComponents.tsx";
 import { Lock, Unlock } from "lucide-react";
+import type { EditorCategory } from "../../types.ts";
 
-/**
- * @param {{ label?: any, value?: any, onChange?: Function, min?: number|string, max?: number|string, step?: number|string, parseFn?: Function, defaultValue?: any, labelClassName?: string, isLocked?: boolean, onToggleLock?: React.MouseEventHandler<HTMLButtonElement>, showLock?: boolean }} props
- */
+type SeatSettingInputProps = {
+  label?: string;
+  value?: number;
+  onChange?: (value: number) => void;
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
+  parseFn?: (value: string) => number;
+  defaultValue?: number;
+  labelClassName?: string;
+  isLocked?: boolean;
+  onToggleLock?: React.MouseEventHandler<HTMLButtonElement>;
+  showLock?: boolean;
+};
+
 const SeatSettingInput = ({
   label,
   value,
@@ -20,7 +33,7 @@ const SeatSettingInput = ({
   isLocked,
   onToggleLock,
   showLock = false,
-}: any) => {
+}: SeatSettingInputProps) => {
   return (
     <>
       <label
@@ -35,8 +48,11 @@ const SeatSettingInput = ({
           max={max}
           step={step}
           value={value}
-          onClick={(e) => /** @type {HTMLInputElement} */ (e.target).select()}
-          onChange={(e) => onChange?.(parseFn?.(e.target.value) || defaultValue)}
+          onClick={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            const parsedValue = parseFn ? parseFn(e.target.value) : defaultValue;
+            if (parsedValue !== undefined) onChange?.(parsedValue);
+          }}
           className="border rounded-md placeholder:text-gray-400 selection:bg-[var(--color-primary-blue)] selection:text-white border-gray-300 h-9 w-full min-w-0 bg-white px-3 py-1 text-base shadow-sm transition-all outline-none disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus:border-[var(--color-primary-blue)] focus:ring-[var(--color-primary-blue)]/30 focus:ring-[3px] aria-invalid:ring-red-500/20 aria-invalid:border-red-500"
         />
         {showLock && (
@@ -61,6 +77,20 @@ export const SeatSettings = ({
   globalSettings,
   onUpdateGlobalSettings,
   categories = [],
+}: {
+  globalSettings: {
+    seatWidth: number;
+    seatHeight: number;
+    seatSpacing: number;
+    rowSpacing: number;
+    defaultSeatCount: number;
+    categoryId?: string | null;
+    defaultCategoryId?: string | null;
+    seatSpacingLocked?: boolean;
+    seatCountLocked?: boolean;
+  };
+  onUpdateGlobalSettings: (settings: Record<string, unknown>) => void;
+  categories?: EditorCategory[];
 }) => {
   return (
     <div className="p-4">

@@ -15,6 +15,7 @@
 
 import { useCallback } from "react";
 import { darkenColor, getSeatColor as resolveSeatColor } from "../utils/index.ts";
+import type { RendererSeat, SeatMap } from "../types.ts";
 
 /**
  * Custom hook for managing seat colors
@@ -23,15 +24,19 @@ import { darkenColor, getSeatColor as resolveSeatColor } from "../utils/index.ts
  * @param {Map} seatTypesMap - Map of seat type IDs to colors
  * @returns {{ getSeatColor: (seat: any) => string, getDarkenedSeatColor: (seat: any) => string }}
  */
-export function useSeatColors(seatMap, selectedSeats, seatTypesMap) {
+export function useSeatColors(
+  seatMap: SeatMap,
+  selectedSeats: Set<string>,
+  seatTypesMap: Map<string, string>,
+) {
   const getSeatColor = useCallback(
-    (seat) =>
+    (seat: RendererSeat) =>
       resolveSeatColor(seat, selectedSeats.has(seat.sl_id), seatTypesMap),
     [selectedSeats, seatTypesMap],
   );
 
   const getDarkenedSeatColor = useCallback(
-    (seat) => darkenColor(getSeatColor(seat), 0.4),
+    (seat: RendererSeat) => darkenColor(getSeatColor(seat), 0.4),
     [getSeatColor],
   );
 

@@ -1,15 +1,32 @@
 import React, { useState } from "react";
 import { Kbd as KbdImport, KbdGroup as KbdGroupImport } from "./Kbd.tsx";
 
-/** @type {(props: any) => any} */
 const Kbd = KbdImport;
-/** @type {(props: any) => any} */
 const KbdGroup = KbdGroupImport;
 
-const ShortcutsModal = ({ isOpen, onClose }) => {
-  const [platform, setPlatform] = useState("mac");
+type Platform = "mac" | "win";
 
-  const shortcuts = [
+type Shortcut = {
+  key?: string;
+  mac?: string;
+  win?: string;
+  description: string;
+};
+
+type ShortcutCategory = {
+  category: string;
+  items: Shortcut[];
+};
+
+type ShortcutsModalProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
+const ShortcutsModal = ({ isOpen, onClose }: ShortcutsModalProps) => {
+  const [platform, setPlatform] = useState<Platform>("mac");
+
+  const shortcuts: ShortcutCategory[] = [
     {
       category: "Tools",
       items: [
@@ -53,18 +70,18 @@ const ShortcutsModal = ({ isOpen, onClose }) => {
     },
   ];
 
-  const parseKeys = (shortcut) => {
+  const parseKeys = (shortcut: Shortcut): string[] => {
     const keyString = platform === "mac" && shortcut.mac ? shortcut.mac : (shortcut.win || shortcut.key || "");
     if (!keyString) return [];
 
     if (keyString.includes(" + ")) {
-      const parts = keyString.split(" + ").map((part) => part.trim());
+      const parts = keyString.split(" + ").map((part: string) => part.trim());
       return parts;
     }
     return [keyString];
   };
 
-  const renderKey = (key) => {
+  const renderKey = (key: string) => {
     const specialKeys = {
       "⌘": "⌘",
       "Ctrl": "Ctrl",
@@ -75,8 +92,9 @@ const ShortcutsModal = ({ isOpen, onClose }) => {
       "Del": "Del",
     };
 
-    if (specialKeys[key]) {
-      return <Kbd key={key}>{specialKeys[key]}</Kbd>;
+    if (key in specialKeys) {
+      const specialKey = key as keyof typeof specialKeys;
+      return <Kbd key={key}>{specialKeys[specialKey]}</Kbd>;
     }
     return <Kbd key={key}>{key}</Kbd>;
   };

@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -148,7 +149,7 @@ func (s *ShowStore) SeatStatuses(ctx context.Context, showID string) ([]domain.S
 	}
 	defer rows.Close()
 
-	var out []domain.SeatStatus
+	out := make([]domain.SeatStatus, 0, 1024)
 	for rows.Next() {
 		var st domain.SeatStatus
 		var state, reserve int16
@@ -167,6 +168,35 @@ func (s *ShowStore) SeatStatuses(ctx context.Context, showID string) ([]domain.S
 		out = append(out, st)
 	}
 	return out, rows.Err()
+}
+
+// SeatStatusesJSON builds the per-seat status array as JSON in Postgres so the
+// read path skips per-row Scan + Go marshal. Aliases match SeatStatus json tags.
+func (s *ShowStore) SeatStatusesJSON(ctx context.Context, showID string) (json.RawMessage, error) {
+	var raw []byte
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COALESCE(json_agg(row_to_json(t)), '[]') FROM (
+		   SELECT seat_uid AS "seatUid", state, reserve_type AS "reserveType",
+		          price_cents AS "priceCents", hold_id AS "holdId", booking_id AS "bookingId"
+		   FROM seat_status WHERE show_id = $1
+		 ) t`, showID).Scan(&raw)
+	if err != nil {
+		return nil, fmt.Errorf("seat statuses json: %w", err)
+	}
+	return json.RawMessage(raw), nil
+}
+
+// SeatStatusVersion returns a cheap freshness token (row count + latest update)
+// for ETag validation of the seats endpoint.
+func (s *ShowStore) SeatStatusVersion(ctx context.Context, showID string) (string, error) {
+	var token string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT count(*)::text || '-' || COALESCE(max(extract(epoch from updated_at))::bigint, 0)::text
+		 FROM seat_status WHERE show_id = $1`, showID).Scan(&token)
+	if err != nil {
+		return "", fmt.Errorf("seat status version: %w", err)
+	}
+	return token, nil
 }
 
 // SetSeatStates applies admin updates to specific seats. Each update touches

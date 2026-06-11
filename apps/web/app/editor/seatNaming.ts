@@ -25,7 +25,7 @@
  * @param {number} index - Zero-based row index
  * @returns {string} Row letter(s)
  */
-export function getRowLabel(index) {
+export function getRowLabel(index: number): string {
   if (index < 0) {
     return 'A';
   }
@@ -57,7 +57,7 @@ export function getRowLabel(index) {
  * @param {string} label - Row label (e.g., "A", "AA", "ZZ")
  * @returns {number} Zero-based row index
  */
-export function parseRowLabel(label) {
+export function parseRowLabel(label: string | null | undefined): number {
   if (!label || typeof label !== 'string') {
     return 0;
   }
@@ -95,7 +95,7 @@ export function parseRowLabel(label) {
  * @param {number} seatNumber - One-based seat number (typically 1, 2, 3, ...)
  * @returns {string} Complete seat label
  */
-export function generateSeatLabel(rowIndex, seatNumber) {
+export function generateSeatLabel(rowIndex: number, seatNumber: number): string {
   const rowLabel = getRowLabel(rowIndex);
   return `${rowLabel}-${seatNumber}`;
 }
@@ -111,7 +111,9 @@ export function generateSeatLabel(rowIndex, seatNumber) {
  * @param {string} label - Complete seat label (e.g., "A-1", "AA-15")
  * @returns {{rowIndex: number, seatNumber: number}} Parsed components
  */
-export function parseSeatLabel(label) {
+export function parseSeatLabel(
+  label: string | null | undefined,
+): { rowIndex: number; seatNumber: number } {
   if (!label || typeof label !== 'string') {
     return { rowIndex: 0, seatNumber: 1 };
   }
@@ -141,7 +143,10 @@ export function parseSeatLabel(label) {
  * @param {string} rowId - The row ID to look up
  * @returns {string} Row label (e.g., "A", "B", "AA")
  */
-export function getRowLabelForRowId(rows, rowId) {
+export function getRowLabelForRowId(
+  rows: Record<string, unknown>,
+  rowId: string,
+): string {
   const rowIds = Object.keys(rows);
   const rowIndex = rowIds.indexOf(rowId);
 
@@ -158,7 +163,7 @@ export function getRowLabelForRowId(rows, rowId) {
  * @param {string} label - Seat label to validate
  * @returns {boolean} True if valid format
  */
-export function isValidSeatLabel(label) {
+export function isValidSeatLabel(label: string | null | undefined): boolean {
   if (!label || typeof label !== 'string') {
     return false;
   }
@@ -174,8 +179,8 @@ export function isValidSeatLabel(label) {
  * @param {number} seatCount - Number of seats in the row
  * @returns {string[]} Array of seat labels
  */
-export function generateRowSeatLabels(rowIndex, seatCount) {
-  const labels = [];
+export function generateRowSeatLabels(rowIndex: number, seatCount: number): string[] {
+  const labels: string[] = [];
   for (let i = 1; i <= seatCount; i++) {
     labels.push(generateSeatLabel(rowIndex, i));
   }

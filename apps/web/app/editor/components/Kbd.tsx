@@ -1,7 +1,10 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 
-export function Kbd({ className, ...props }: any) {
+type KbdProps = React.ComponentPropsWithoutRef<"kbd">;
+type KbdGroupProps = React.ComponentPropsWithoutRef<"div">;
+
+export function Kbd({ className, ...props }: KbdProps) {
   return (
     <kbd
       data-slot="kbd"
@@ -15,7 +18,7 @@ export function Kbd({ className, ...props }: any) {
   );
 }
 
-export function KbdGroup({ className, ...props }: any) {
+export function KbdGroup({ className, ...props }: KbdGroupProps) {
   return (
     <div
       data-slot="kbd-group"

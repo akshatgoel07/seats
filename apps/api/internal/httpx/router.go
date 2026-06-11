@@ -8,13 +8,15 @@ import (
 )
 
 // Wrap applies the global middleware chain to a handler (typically the root
-// mux). Order: RequestID -> Recover -> Logger -> CORS -> RateLimit -> Auth.
-// Auth is currently a no-op (see config.AuthEnabled).
+// mux). Order: RequestID -> Recover -> Logger -> Gzip -> CORS -> RateLimit ->
+// Auth. Gzip sits just inside Logger so the logged byte count is the compressed
+// wire size. Auth is currently a no-op (see config.AuthEnabled).
 func Wrap(h http.Handler, cfg config.Config, log *slog.Logger, authn Authenticator) http.Handler {
 	return Chain(h,
 		RequestID(),
 		Recover(log),
 		Logger(log),
+		Gzip(),
 		CORS(cfg.CORSOrigins),
 		RateLimit(cfg.RateLimitRPS, cfg.RateLimitBurst),
 		Auth(cfg.AuthEnabled, authn),

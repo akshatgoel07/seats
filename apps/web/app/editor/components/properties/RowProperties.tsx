@@ -1,6 +1,20 @@
 import React, { useState } from "react";
 import { PropertySection, InputField, SelectField } from "./UIComponents.tsx";
 import { ChevronLeft, ChevronRight, RotateCcw, RotateCw } from "lucide-react";
+import type { EditorCategory, EditorRow, EditorScene } from "../../types.ts";
+
+type RowUpdate = Record<string, unknown>;
+type LineGeometry = Extract<EditorRow["geometry"], { kind: "line" }>;
+type ArcGeometry = Extract<EditorRow["geometry"], { kind: "arc" }>;
+type RowPropertiesProps = {
+  selectedRows: EditorRow[];
+  multipleSelected: boolean;
+  inferredRowFromSelectedSeats: EditorRow;
+  scene: EditorScene;
+  categories: EditorCategory[];
+  onRowUpdate: (id: string, updates: RowUpdate) => void;
+  onAdjustSeatSpacing: (seatIds: string[], delta: number) => void;
+};
 
 export const RowProperties = ({
   selectedRows,
@@ -10,7 +24,7 @@ export const RowProperties = ({
   categories,
   onRowUpdate,
   onAdjustSeatSpacing,
-}) => {
+}: RowPropertiesProps) => {
   const [isEditingSeatCount, setIsEditingSeatCount] = useState(false);
   const [tempSeatCount, setTempSeatCount] = useState("");
   const [isEditingSpacing, setIsEditingSpacing] = useState(false);
@@ -36,7 +50,7 @@ export const RowProperties = ({
     setTempSeatCount("");
   };
 
-  const handleSeatCountKeyDown = (e) => {
+  const handleSeatCountKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleSeatCountBlur();
     } else if (e.key === "Escape") {
@@ -61,7 +75,7 @@ export const RowProperties = ({
     setTempSpacing("");
   };
 
-  const handleSpacingKeyDown = (e) => {
+  const handleSpacingKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleSpacingBlur();
     } else if (e.key === "Escape") {
@@ -76,7 +90,7 @@ export const RowProperties = ({
   };
 
   // Helper function to format curve values for display
-  const formatCurveValue = (value) => {
+  const formatCurveValue = (value: number) => {
     if (typeof value !== "number") return "0";
     // Round to 2 decimal places to avoid floating-point precision issues
     return (Math.round(value * 100) / 100).toString();
@@ -93,7 +107,7 @@ export const RowProperties = ({
     setTempCurve("");
   };
 
-  const handleCurveKeyDown = (e) => {
+  const handleCurveKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       handleCurveBlur();
     } else if (e.key === "Escape") {
@@ -103,7 +117,7 @@ export const RowProperties = ({
   };
 
   // Helper function to rotate a row by a given angle (in radians)
-  const rotateRow = (rowId, angleRadians) => {
+  const rotateRow = (rowId: string, angleRadians: number) => {
     const row = scene.rows[rowId];
     if (!row) return;
 
@@ -140,7 +154,7 @@ export const RowProperties = ({
     setPreviousRotation(currentRotationDegrees);
   }
 
-  const renderSingleRowProperties = (row) => (
+  const renderSingleRowProperties = (row: EditorRow) => (
     <>
       <InputField
         label="Seat Count"
@@ -148,7 +162,7 @@ export const RowProperties = ({
         value={row.seatCount}
         onChange={(value) =>
           onRowUpdate(row.id, {
-            seatCount: parseInt(value) || 1,
+            seatCount: parseInt(String(value)) || 1,
           })
         }
         min="1"
@@ -252,7 +266,7 @@ export const RowProperties = ({
         value={formatCurveValue(row.curve || 0)}
         onChange={(value) =>
           onRowUpdate(row.id, {
-            curve: Math.round((parseFloat(value) || 0) * 100) / 100,
+            curve: Math.round((parseFloat(String(value)) || 0) * 100) / 100,
           })
         }
         step="0.1"
@@ -396,8 +410,8 @@ export const RowProperties = ({
                 const newGeometry = {
                   ...row.geometry,
                   p1: {
-                    ...row.geometry.p1,
-                    x: parseInt(value) || 0,
+                    ...(row.geometry as LineGeometry).p1,
+                    x: parseInt(String(value)) || 0,
                   },
                 };
                 onRowUpdate(row.id, {
@@ -413,8 +427,8 @@ export const RowProperties = ({
                 const newGeometry = {
                   ...row.geometry,
                   p1: {
-                    ...row.geometry.p1,
-                    y: parseInt(value) || 0,
+                    ...(row.geometry as LineGeometry).p1,
+                    y: parseInt(String(value)) || 0,
                   },
                 };
                 onRowUpdate(row.id, {
@@ -430,8 +444,8 @@ export const RowProperties = ({
                 const newGeometry = {
                   ...row.geometry,
                   p2: {
-                    ...row.geometry.p2,
-                    x: parseInt(value) || 0,
+                    ...(row.geometry as LineGeometry).p2,
+                    x: parseInt(String(value)) || 0,
                   },
                 };
                 onRowUpdate(row.id, {
@@ -447,8 +461,8 @@ export const RowProperties = ({
                 const newGeometry = {
                   ...row.geometry,
                   p2: {
-                    ...row.geometry.p2,
-                    y: parseInt(value) || 0,
+                    ...(row.geometry as LineGeometry).p2,
+                    y: parseInt(String(value)) || 0,
                   },
                 };
                 onRowUpdate(row.id, {
@@ -475,8 +489,8 @@ export const RowProperties = ({
                 const newGeometry = {
                   ...row.geometry,
                   center: {
-                    ...row.geometry.center,
-                    x: parseInt(value) || 0,
+                    ...(row.geometry as ArcGeometry).center,
+                    x: parseInt(String(value)) || 0,
                   },
                 };
                 onRowUpdate(row.id, {
@@ -492,8 +506,8 @@ export const RowProperties = ({
                 const newGeometry = {
                   ...row.geometry,
                   center: {
-                    ...row.geometry.center,
-                    y: parseInt(value) || 0,
+                    ...(row.geometry as ArcGeometry).center,
+                    y: parseInt(String(value)) || 0,
                   },
                 };
                 onRowUpdate(row.id, {
@@ -508,7 +522,7 @@ export const RowProperties = ({
               onChange={(value) => {
                 const newGeometry = {
                   ...row.geometry,
-                  radiusX: parseInt(value) || 50,
+                  radiusX: parseInt(String(value)) || 50,
                 };
                 onRowUpdate(row.id, {
                   geometry: newGeometry,
@@ -523,7 +537,7 @@ export const RowProperties = ({
               onChange={(value) => {
                 const newGeometry = {
                   ...row.geometry,
-                  radiusY: parseInt(value) || 50,
+                  radiusY: parseInt(String(value)) || 50,
                 };
                 onRowUpdate(row.id, {
                   geometry: newGeometry,
@@ -542,7 +556,7 @@ export const RowProperties = ({
               type="number"
               value={Math.round((row.geometry.startAngle * 180) / Math.PI)}
               onChange={(value) => {
-                const angleInRadians = (parseInt(value) || 0) * (Math.PI / 180);
+                const angleInRadians = (parseInt(String(value)) || 0) * (Math.PI / 180);
                 const newGeometry = {
                   ...row.geometry,
                   startAngle: angleInRadians,
@@ -559,7 +573,7 @@ export const RowProperties = ({
               type="number"
               value={Math.round((row.geometry.endAngle * 180) / Math.PI)}
               onChange={(value) => {
-                const angleInRadians = (parseInt(value) || 0) * (Math.PI / 180);
+                const angleInRadians = (parseInt(String(value)) || 0) * (Math.PI / 180);
                 const newGeometry = {
                   ...row.geometry,
                   endAngle: angleInRadians,
@@ -583,8 +597,8 @@ export const RowProperties = ({
             )}
             ° (
             {Math.round(
-              (((row.geometry.radiusX || row.geometry.radius) +
-                (row.geometry.radiusY || row.geometry.radius)) /
+              (((row.geometry.radiusX || row.geometry.radius || 0) +
+                (row.geometry.radiusY || row.geometry.radius || 0)) /
                 2) *
                 Math.abs(row.geometry.endAngle - row.geometry.startAngle),
             )}{" "}

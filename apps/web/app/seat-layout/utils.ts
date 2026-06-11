@@ -1,13 +1,19 @@
 /**
  * Utility functions for seat layout calculations
  */
+type LegacySeatRecord = {
+  sl_meta_data?: string;
+  is_open_seating_area?: string | null;
+  seat_reserve_type_id?: number | string | null;
+  [key: string]: unknown;
+};
 
 /**
  * Safely check if a seat is an open seating area, handling missing or undefined values
  * @param {Object} seat - The seat object
  * @returns {boolean} - True if the seat is an open seating area, false otherwise
  */
-function isOpenSeatingArea(seat) {
+function isOpenSeatingArea(seat: LegacySeatRecord | null | undefined): boolean {
   // Handle cases where the field doesn't exist in the object
   if (!seat || !seat.hasOwnProperty("is_open_seating_area")) {
     return false;
@@ -31,7 +37,9 @@ function isOpenSeatingArea(seat) {
  * @param {Object} seat - The seat object
  * @returns {boolean} - True if blocked by reserve type 8, 12, or 13
  */
-function isBlockedByReserveType(seat) {
+function isBlockedByReserveType(
+  seat: LegacySeatRecord | null | undefined,
+): boolean {
   // Handle cases where the field doesn't exist in the object
   if (!seat || !seat.hasOwnProperty("seat_reserve_type_id")) {
     return false; // Not blocked if field is missing
@@ -59,7 +67,7 @@ function isBlockedByReserveType(seat) {
  * @param {Array} seats - Array of seat records from the API
  * @returns {Object} - Object containing count and detailed breakdown
  */
-export function calculateOpenSeats(seats) {
+export function calculateOpenSeats(seats: LegacySeatRecord[]) {
   if (!Array.isArray(seats)) {
     return {
       totalOpenSeats: 0,
@@ -88,7 +96,7 @@ export function calculateOpenSeats(seats) {
   seats.forEach((seat) => {
     try {
       // Parse seat metadata to get seat information
-      const apiMeta = JSON.parse(seat.sl_meta_data);
+      const apiMeta = JSON.parse(seat.sl_meta_data || "");
       if (!apiMeta) return;
 
       // Check if this is an open seating area seat (with safe handling)
@@ -150,7 +158,7 @@ export function calculateOpenSeats(seats) {
  * @param {Array} seats - Array of seat records from the API
  * @returns {Object} - Detailed breakdown by seat categories
  */
-export function getSeatAvailabilityBreakdown(seats) {
+export function getSeatAvailabilityBreakdown(seats: LegacySeatRecord[]) {
   if (!Array.isArray(seats)) {
     return {
       openSeatingArea: {
@@ -187,7 +195,7 @@ export function getSeatAvailabilityBreakdown(seats) {
 
   seats.forEach((seat) => {
     try {
-      const apiMeta = JSON.parse(seat.sl_meta_data);
+      const apiMeta = JSON.parse(seat.sl_meta_data || "");
       if (!apiMeta) return; // Skip seat if metadata is invalid or empty
 
       // Use safe helper functions to check seat properties

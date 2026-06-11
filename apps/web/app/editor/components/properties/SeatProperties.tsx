@@ -1,6 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { RotateCw, RotateCcw } from "lucide-react";
 import { PropertySection, InputField, SelectField } from "./UIComponents.tsx";
+import type { EditorCategory, EditorScene, EditorSeat } from "../../types.ts";
+
+type SeatUpdate = Record<string, unknown>;
+type SeatPropertiesProps = {
+  selectedSeats: EditorSeat[];
+  multipleSelected: boolean;
+  categories: EditorCategory[];
+  onSeatUpdate: (id: string, updates: SeatUpdate) => void;
+  onSeatsUpdate: (ids: string[], updates: SeatUpdate) => void;
+  onAdjustSeatSpacing: (seatIds: string[], delta: number) => void;
+  onRotateSelectedSeats: (angle: number) => void;
+  scene: EditorScene;
+  onRowUpdate: (id: string, updates: SeatUpdate) => void;
+};
 
 export const SeatProperties = ({
   selectedSeats,
@@ -12,7 +26,7 @@ export const SeatProperties = ({
   onRotateSelectedSeats,
   scene,
   onRowUpdate,
-}) => {
+}: SeatPropertiesProps) => {
   const [bulkWidth, setBulkWidth] = useState("");
   const [bulkHeight, setBulkHeight] = useState("");
   const [bulkRadius, setBulkRadius] = useState("");
@@ -25,7 +39,7 @@ export const SeatProperties = ({
       new Set(selectedSeats.map((s) => s.rowId).filter(Boolean)),
     );
     if (rowIds.length === 1) {
-      return scene.rows[rowIds[0] as any];
+      return scene.rows[rowIds[0] as string];
     }
     return null;
   }, [selectedSeats, scene.rows]);
@@ -60,7 +74,7 @@ export const SeatProperties = ({
     setRotationAngle(currentRotationDegrees);
     setPreviousRotation(currentRotationDegrees);
   }
-  const renderSingleSeatProperties = (seat) => (
+  const renderSingleSeatProperties = (seat: EditorSeat) => (
     <>
       <InputField
         label="Label"
@@ -77,7 +91,7 @@ export const SeatProperties = ({
           value={seat.width}
           onChange={(value) => {
             onSeatUpdate(seat.id, {
-              width: parseInt(value) || 30,
+              width: parseInt(String(value)) || 30,
             });
           }}
           min="10"
@@ -89,7 +103,7 @@ export const SeatProperties = ({
           value={seat.height}
           onChange={(value) => {
             onSeatUpdate(seat.id, {
-              height: parseInt(value) || 30,
+              height: parseInt(String(value)) || 30,
             });
           }}
           min="10"
@@ -103,7 +117,7 @@ export const SeatProperties = ({
         value={seat.radius}
         onChange={(value) => {
           onSeatUpdate(seat.id, {
-            radius: parseInt(value) || 0,
+            radius: parseInt(String(value)) || 0,
           });
         }}
         min="0"
@@ -118,7 +132,7 @@ export const SeatProperties = ({
           value={Math.round(seat.localX)}
           onChange={(value) => {
             onSeatUpdate(seat.id, {
-              localX: parseInt(value) || 0,
+              localX: parseInt(String(value)) || 0,
             });
           }}
         />
@@ -128,7 +142,7 @@ export const SeatProperties = ({
           value={Math.round(seat.localY)}
           onChange={(value) => {
             onSeatUpdate(seat.id, {
-              localY: parseInt(value) || 0,
+              localY: parseInt(String(value)) || 0,
             });
           }}
         />
@@ -430,11 +444,11 @@ export const SeatProperties = ({
           type="number"
           value={bulkWidth}
           onChange={(value) => {
-            setBulkWidth(value);
+            setBulkWidth(String(value));
             if (value) {
               onSeatsUpdate(
                 selectedSeats.map((s) => s.id),
-                { width: parseInt(value) || 30 },
+                { width: parseInt(String(value)) || 30 },
               );
             }
           }}
@@ -447,11 +461,11 @@ export const SeatProperties = ({
           type="number"
           value={bulkHeight}
           onChange={(value) => {
-            setBulkHeight(value);
+            setBulkHeight(String(value));
             if (value) {
               onSeatsUpdate(
                 selectedSeats.map((s) => s.id),
-                { height: parseInt(value) || 30 },
+                { height: parseInt(String(value)) || 30 },
               );
             }
           }}
@@ -467,8 +481,8 @@ export const SeatProperties = ({
           type="number"
           value={inferredRowFromSelectedSeats.spacing || ""}
           onChange={(value) => {
-            if (value && onRowUpdate) {
-              const spacingValue = parseFloat(value) || 7.0;
+            if (value) {
+              const spacingValue = parseFloat(String(value)) || 7.0;
               const currentSpacing = inferredRowFromSelectedSeats.spacing || 7.0;
               const delta = spacingValue - currentSpacing;
               if (delta !== 0) {
@@ -494,7 +508,7 @@ export const SeatProperties = ({
           onChange={(value) => {
             if (value && onRowUpdate) {
               onRowUpdate(inferredRowFromSelectedSeats.id, {
-                rowSpacing: parseInt(value) || 30,
+                rowSpacing: parseInt(String(value)) || 30,
               });
             }
           }}

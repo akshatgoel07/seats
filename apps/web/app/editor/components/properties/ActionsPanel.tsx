@@ -1,6 +1,15 @@
 import React from "react";
 import { Save, CircleHelp } from "lucide-react";
 import { useTour } from "../../hooks/useTour.ts";
+import type { EditorScene } from "../../types.ts";
+
+type ActionsPanelProps = {
+  isSaving: boolean;
+  scene: EditorScene;
+  selectedIds: string[];
+  onSaveSeatLayout: () => void;
+  onDeleteItems: (ids: string[]) => void;
+};
 
 export const ActionsPanel = ({
   isSaving,
@@ -8,7 +17,7 @@ export const ActionsPanel = ({
   selectedIds,
   onSaveSeatLayout,
   onDeleteItems,
-}) => {
+}: ActionsPanelProps) => {
   const { startTour } = useTour();
 
   return (

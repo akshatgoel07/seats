@@ -12,6 +12,12 @@
 import { useState, useCallback, useEffect } from "react";
 import { getAvailableStandingSeats } from "../utils/index.ts";
 import { showToast } from "@/app/lib/toast";
+import type {
+  LayoutData,
+  LayoutRecord,
+  RendererSeat,
+  StandingSectionElement,
+} from "../types.ts";
 
 /**
  * Custom hook for managing standing section modal
@@ -20,17 +26,20 @@ import { showToast } from "@/app/lib/toast";
  * @param {Function} zoomToElement - Function to zoom to a specific element
  * @returns {Object} Standing section state and handlers
  */
-export function useStandingSection(layoutData, addStandingTickets, zoomToElement) {
+export function useStandingSection(
+  layoutData: LayoutData | null,
+  addStandingTickets: (tickets: RendererSeat[]) => void,
+  zoomToElement?: (element: StandingSectionElement, paddingMultiplier?: number) => void,
+) {
   const [showStandingPopup, setShowStandingPopup] = useState(false);
-  const [selectedStandingSection, setSelectedStandingSection] = useState(
-    /** @type {any} */ (null),
-  );
+  const [selectedStandingSection, setSelectedStandingSection] =
+    useState<StandingSectionElement | null>(null);
   const [standingQuantity, setStandingQuantity] = useState(0);
   const [showSoldOutMessage, setShowSoldOutMessage] = useState(false);
 
   // Handle escape key to close popup
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && showStandingPopup) {
         setShowStandingPopup(false);
       }
@@ -52,7 +61,7 @@ export function useStandingSection(layoutData, addStandingTickets, zoomToElement
    * Handle standing section click
    */
   const handleStandingSectionClick = useCallback(
-    (/** @type {any} */ element) => {
+    (element: StandingSectionElement) => {
       if (!layoutData) return;
 
       const seats = layoutData.Records || [];
@@ -88,7 +97,7 @@ export function useStandingSection(layoutData, addStandingTickets, zoomToElement
    * Handle standing section quantity change
    */
   const handleStandingQuantityChange = useCallback(
-    (newQuantity) => {
+    (newQuantity: number) => {
       if (selectedStandingSection && layoutData) {
         const seats = layoutData.Records || [];
 
@@ -139,7 +148,7 @@ export function useStandingSection(layoutData, addStandingTickets, zoomToElement
       );
 
       // Store the standing seats data using the actual API structure
-      const newStandingTickets = selectedStandingSeats.map((seat) => {
+      const newStandingTickets = selectedStandingSeats.map((seat: LayoutRecord) => {
         try {
           const apiMeta = JSON.parse(seat.sl_meta_data);
           return {
@@ -193,7 +202,7 @@ export function useStandingSection(layoutData, addStandingTickets, zoomToElement
    * Get available seats count for a specific standing section
    */
   const getAvailableSeatsCount = useCallback(
-    (standingSectionId) => {
+    (standingSectionId: string) => {
       if (!layoutData) return 0;
 
       const seats = layoutData.Records || [];

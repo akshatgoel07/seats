@@ -4,8 +4,14 @@
  */
 
 import React from "react";
+import type { RendererElement } from "../../types.ts";
 
-export function TextElement({ element, elementId }) {
+type ElementProps = {
+  element: RendererElement;
+  elementId: string;
+};
+
+export function TextElement({ element, elementId }: ElementProps) {
   const scale = element.scale || 1.0;
   // Convert rotation from radians to degrees for SVG transform
   const rotationDegrees = ((element.rotation || 0) * 180) / Math.PI;

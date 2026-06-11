@@ -1,13 +1,22 @@
 "use client";
 
 import { createElement, ELEMENT_TYPES } from "./types.ts";
+import type { EditorElement, Point } from "./types.ts";
 
-export function svgPathsToElements(svgText, options: any = {}) {
+type SvgImportOptions = {
+  sampleDistance?: number;
+  defaultStrokeColor?: string;
+};
+
+export function svgPathsToElements(
+  svgText: string,
+  options: SvgImportOptions = {},
+): EditorElement[] {
   const { sampleDistance = 5, defaultStrokeColor = "#333333" } = options;
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgText, "image/svg+xml");
   const pathNodes = Array.from(doc.querySelectorAll("path"));
-  const elements: any[] = [];
+  const elements: EditorElement[] = [];
 
   pathNodes.forEach((node) => {
     const d = node.getAttribute("d");
@@ -33,7 +42,7 @@ export function svgPathsToElements(svgText, options: any = {}) {
     if (!isFinite(length) || length <= 0) return;
 
     const step = Math.max(1, sampleDistance);
-    const points: any[] = [];
+    const points: Point[] = [];
     for (let dist = 0; dist <= length; dist += step) {
       const pt = tempPath.getPointAtLength(dist);
       points.push({ x: pt.x, y: pt.y });

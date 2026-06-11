@@ -1,9 +1,16 @@
 "use client";
 import React from "react";
+import type { SeatType } from "../types.ts";
 
-const SeatLegend = ({ seatTypes, selectedLegendType, onLegendClick }) => {
+type SeatLegendProps = {
+  seatTypes: SeatType[];
+  selectedLegendType: SeatType | null;
+  onLegendClick: (seatType: SeatType) => void;
+};
+
+const SeatLegend = ({ seatTypes, selectedLegendType, onLegendClick }: SeatLegendProps) => {
   const activeSeatTypes = seatTypes.filter(
-    (seatType) => seatType.sst_is_active === "Y",
+    (seatType: SeatType) => seatType.sst_is_active === "Y",
   );
 
   return (
@@ -11,7 +18,7 @@ const SeatLegend = ({ seatTypes, selectedLegendType, onLegendClick }) => {
       {/* Main Legend Panel - Horizontal Bar */}
       <div className="bg-white/95 backdrop-blur-sm rounded-2xl border border-gray-200 shadow-xl px-2 py-1">
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {activeSeatTypes.map((seatType) => {
+          {activeSeatTypes.map((seatType: SeatType) => {
             const isSelected = selectedLegendType?.sst_id === seatType.sst_id;
             return (
               <div

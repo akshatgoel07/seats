@@ -1,4 +1,5 @@
 import React, { Suspense } from "react";
+import type { ReactNode } from "react";
 
 // Lazy load the components for code splitting
 export const SceneProperties = React.lazy(() =>
@@ -37,6 +38,6 @@ export const PropertiesLoadingFallback = () => (
 );
 
 // Wrapper component for lazy loading with suspense
-export const LazyPropertySection = ({ children }) => (
+export const LazyPropertySection = ({ children }: { children: ReactNode }) => (
   <Suspense fallback={<PropertiesLoadingFallback />}>{children}</Suspense>
 );

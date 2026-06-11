@@ -38,6 +38,9 @@ export function isMobileDevice() {
  * @param {number} mobilePadding - Padding value for mobile devices
  * @returns {number} Appropriate padding value for current device
  */
-export function getViewportPadding(desktopPadding, mobilePadding) {
+export function getViewportPadding(
+  desktopPadding: number,
+  mobilePadding: number,
+): number {
   return isMobileDevice() ? mobilePadding : desktopPadding;
 }

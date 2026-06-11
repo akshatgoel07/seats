@@ -1,6 +1,17 @@
 "use client";
 import { X, Ticket, Info } from "lucide-react";
 import React, { useState, useEffect } from "react";
+import type { LayoutData, StandingSectionElement } from "../types.ts";
+
+export type StandingSectionTicketProps = {
+  selectedStandingSection: StandingSectionElement;
+  standingQuantity?: number;
+  onQuantityChange: (quantity: number) => void;
+  onPurchase: () => void;
+  onClose: () => void;
+  availableSeats?: number;
+  layoutData: LayoutData | null;
+};
 
 const StandingSectionTicket = ({
   selectedStandingSection,
@@ -10,7 +21,7 @@ const StandingSectionTicket = ({
   onClose,
   availableSeats = 0,
   layoutData,
-}) => {
+}: StandingSectionTicketProps) => {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
@@ -27,7 +38,7 @@ const StandingSectionTicket = ({
 
   // Handle ESC key
   useEffect(() => {
-    const handleEsc = (e) => {
+    const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") handleClose();
     };
     window.addEventListener("keydown", handleEsc);
@@ -45,13 +56,13 @@ const StandingSectionTicket = ({
     }, 200);
   };
 
-  const handleBackdropClick = (e) => {
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
       handleClose();
     }
   };
 
-  const handleQuantityChange = (newQuantity) => {
+  const handleQuantityChange = (newQuantity: number) => {
     if (isSoldOut) return; // Don't allow changes if sold out
 
     if (newQuantity >= 0 && newQuantity <= maxTickets) {
