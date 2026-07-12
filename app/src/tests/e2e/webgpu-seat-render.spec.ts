@@ -1,5 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { inflateSync } from 'node:zlib';
+
+import { generateSeatMap } from '../../fixtures/generate';
+import { SEAT_STATE_FLAG_UNAVAILABLE } from '../../shared/instance-layout';
+import { flattenSeatMap, type SeatMapDocument } from '../../shared/seat-map';
+
+const DEMO_FIXTURE_SEED = 20260712;
 
 interface BrowserGpuDevice {
   destroy?: () => void;
@@ -25,32 +31,7 @@ interface PngImage {
 
 test('renders and zooms the 10k stadium WebGPU demo scene', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 720 });
-  const support = await page.evaluate(async () => {
-    const gpu = (navigator as BrowserNavigatorWithGpu).gpu;
-
-    if (!gpu) {
-      return { supported: false, reason: 'navigator.gpu is unavailable in headless Chromium' };
-    }
-
-    const adapter = await gpu.requestAdapter();
-
-    if (!adapter) {
-      return { supported: false, reason: 'requestAdapter() returned null in headless Chromium' };
-    }
-
-    try {
-      const device = await adapter.requestDevice();
-      device.destroy?.();
-      return { supported: true, reason: '' };
-    } catch (error) {
-      return {
-        supported: false,
-        reason: `requestDevice() failed in headless Chromium: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      };
-    }
-  });
+  const support = await detectWebGpuSupport(page);
 
   if (!support.supported) {
     test.skip(true, support.reason);
@@ -125,7 +106,235 @@ test('renders and zooms the 10k stadium WebGPU demo scene', async ({ page }) => 
     countNonWhitePixels(zoomedPng) / (zoomedPng.width * zoomedPng.height);
 
   expect(zoomedNonBackgroundRatio).toBeGreaterThan(0.005);
+  await exerciseGridInteraction(page);
 });
+
+async function exerciseGridInteraction(page: Page): Promise<void> {
+  await page.goto('/?layout=grid&seats=1000');
+  await waitForRenderedDemo(page, 1000);
+
+  const document = generateSeatMap({
+    layout: 'grid',
+    seatCount: 1000,
+    seed: DEMO_FIXTURE_SEED,
+  });
+  const flat = flattenSeatMap(document);
+  const availableIndex = findSeatIndexByAvailability(flat.stateFlags, true);
+  const unavailableIndex = findSeatIndexByAvailability(flat.stateFlags, false);
+  const availablePoint = await screenPointForSeat(
+    page,
+    document,
+    flat.x[availableIndex],
+    flat.y[availableIndex],
+  );
+  const unavailablePoint = await screenPointForSeat(
+    page,
+    document,
+    flat.x[unavailableIndex],
+    flat.y[unavailableIndex],
+  );
+
+  const pickedAvailable = await pickAt(page, availablePoint.x, availablePoint.y);
+  expect(pickedAvailable?.seatIndex).toBe(availableIndex);
+
+  await page.mouse.move(availablePoint.x, availablePoint.y);
+  await page.waitForFunction((seatIndex) => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutInteractionLog?: Array<{
+        readonly type: string;
+        readonly payload: { readonly seatIndex?: number } | null;
+      }>;
+    };
+
+    return host.__seatLayoutInteractionLog?.some(
+      (entry) => entry.type === 'seatHover' && entry.payload?.seatIndex === seatIndex,
+    );
+  }, availableIndex);
+
+  await page.mouse.click(availablePoint.x, availablePoint.y);
+
+  await page.waitForFunction((seatIndex) => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutInteractionLog?: Array<{
+        readonly type: string;
+        readonly payload: {
+          readonly seatIndex?: number;
+          readonly selected?: boolean;
+          readonly selectedIndices?: readonly number[];
+        } | null;
+      }>;
+    };
+
+    return host.__seatLayoutInteractionLog?.some(
+      (entry) =>
+        entry.type === 'seatSelect' &&
+        entry.payload?.seatIndex === seatIndex &&
+        entry.payload.selected === true,
+    );
+  }, availableIndex);
+
+  await expect(page.locator('#seat-selection-count')).toHaveText('1 selected');
+  await expect(
+    page.locator(`#seat-selection-list [data-seat-index="${availableIndex}"]`),
+  ).toBeVisible();
+
+  const pickedUnavailable = await pickAt(page, unavailablePoint.x, unavailablePoint.y);
+  expect(pickedUnavailable?.seatIndex).toBe(unavailableIndex);
+
+  await page.mouse.click(unavailablePoint.x, unavailablePoint.y);
+  await expect(page.locator('#seat-selection-count')).toHaveText('1 selected');
+
+  const selectedUnavailableEvents = await page.evaluate((seatIndex) => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutInteractionLog?: Array<{
+        readonly type: string;
+        readonly payload: { readonly seatIndex?: number; readonly selected?: boolean } | null;
+      }>;
+    };
+
+    return (
+      host.__seatLayoutInteractionLog?.filter(
+        (entry) =>
+          entry.type === 'seatSelect' &&
+          entry.payload?.seatIndex === seatIndex &&
+          entry.payload.selected === true,
+      ).length ?? 0
+    );
+  }, unavailableIndex);
+
+  expect(selectedUnavailableEvents).toBe(0);
+}
+
+async function detectWebGpuSupport(page: Page): Promise<{ supported: boolean; reason: string }> {
+  return page.evaluate(async () => {
+    const gpu = (navigator as BrowserNavigatorWithGpu).gpu;
+
+    if (!gpu) {
+      return { supported: false, reason: 'navigator.gpu is unavailable in headless Chromium' };
+    }
+
+    const adapter = await gpu.requestAdapter();
+
+    if (!adapter) {
+      return { supported: false, reason: 'requestAdapter() returned null in headless Chromium' };
+    }
+
+    try {
+      const device = await adapter.requestDevice();
+      device.destroy?.();
+      return { supported: true, reason: '' };
+    } catch (error) {
+      return {
+        supported: false,
+        reason: `requestDevice() failed in headless Chromium: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      };
+    }
+  });
+}
+
+async function waitForRenderedDemo(page: Page, instanceCount: number): Promise<void> {
+  await page.waitForFunction(() => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutDemoStatus?: { readonly state: string };
+    };
+
+    return Boolean(
+      host.__seatLayoutDemoStatus && host.__seatLayoutDemoStatus.state !== 'initializing',
+    );
+  });
+
+  const status = await page.evaluate(() => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutDemoStatus?: {
+        readonly state: string;
+        readonly reason?: string;
+        readonly instanceCount?: number;
+      };
+    };
+
+    return host.__seatLayoutDemoStatus;
+  });
+
+  if (status?.state === 'unsupported') {
+    test.skip(true, status.reason ?? 'WebGPU became unavailable while loading the demo page');
+    return;
+  }
+
+  expect(status).toEqual({ state: 'rendered', backend: 'webgpu', instanceCount });
+}
+
+async function screenPointForSeat(
+  page: Page,
+  document: SeatMapDocument,
+  worldX: number,
+  worldY: number,
+): Promise<{ readonly x: number; readonly y: number }> {
+  const canvasMetrics = await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('#seat-canvas');
+
+    if (!canvas) {
+      throw new Error('Expected #seat-canvas');
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    return {
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      rectLeft: rect.left,
+      rectTop: rect.top,
+      rectWidth: rect.width,
+      rectHeight: rect.height,
+    };
+  });
+  const contentWidth = Math.max(1, document.bounds.maxX - document.bounds.minX);
+  const contentHeight = Math.max(1, document.bounds.maxY - document.bounds.minY);
+  const paddedWidth = Math.max(1, canvasMetrics.canvasWidth - 80);
+  const paddedHeight = Math.max(1, canvasMetrics.canvasHeight - 80);
+  const zoom = Math.min(paddedWidth / contentWidth, paddedHeight / contentHeight);
+  const centerX = (document.bounds.minX + document.bounds.maxX) * 0.5;
+  const centerY = (document.bounds.minY + document.bounds.maxY) * 0.5;
+  const screenX = (worldX - centerX) * zoom + canvasMetrics.canvasWidth * 0.5;
+  const screenY = (worldY - centerY) * zoom + canvasMetrics.canvasHeight * 0.5;
+
+  return {
+    x: canvasMetrics.rectLeft + (screenX / canvasMetrics.canvasWidth) * canvasMetrics.rectWidth,
+    y: canvasMetrics.rectTop + (screenY / canvasMetrics.canvasHeight) * canvasMetrics.rectHeight,
+  };
+}
+
+function findSeatIndexByAvailability(stateFlags: Uint32Array, available: boolean): number {
+  for (let index = 0; index < stateFlags.length; index += 1) {
+    const isAvailable = (stateFlags[index] & SEAT_STATE_FLAG_UNAVAILABLE) === 0;
+
+    if (isAvailable === available) {
+      return index;
+    }
+  }
+
+  throw new Error(`Expected at least one ${available ? 'available' : 'unavailable'} seat`);
+}
+
+async function pickAt(
+  page: Page,
+  clientX: number,
+  clientY: number,
+): Promise<{ readonly seatIndex: number; readonly seatId: string } | null> {
+  return page.evaluate(
+    ([x, y]) => {
+      const host = globalThis as typeof globalThis & {
+        __seatLayoutPickAt?: (
+          clientX: number,
+          clientY: number,
+        ) => { readonly seatIndex: number; readonly seatId: string } | null;
+      };
+
+      return host.__seatLayoutPickAt?.(x, y) ?? null;
+    },
+    [clientX, clientY] as const,
+  );
+}
 
 function countNonWhitePixels(image: PngImage): number {
   let nonWhitePixels = 0;

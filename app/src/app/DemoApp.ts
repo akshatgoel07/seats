@@ -2,6 +2,7 @@ import { generateSeatMap, type LayoutKind } from '../fixtures/generate';
 import { SeatRenderer } from '../renderer/SeatRenderer';
 import type { RenderBackend } from '../renderer/graphics/RenderTypes';
 import { WebGpuDevice } from '../renderer/graphics/webgpu/WebGpuDevice';
+import type { SeatLayoutEvents, SeatLayoutSeatInfo } from '../shared/events';
 import type { Seat, SeatCategory, SeatMapDocument } from '../shared/seat-map';
 
 export type DemoRenderStatus =
@@ -17,11 +18,27 @@ export interface DemoAppOptions {
 
 interface DemoGlobal {
   __seatLayoutDemoStatus?: DemoRenderStatus;
+  __seatLayoutPickAt?: (clientX: number, clientY: number) => SeatLayoutSeatInfo | null;
+  __seatLayoutInteractionLog?: DemoInteractionLogEntry[];
 }
 
 interface FixtureSelection {
   readonly layout: LayoutKind;
   readonly seatCount: number;
+}
+
+type DemoInteractionLogEntry = {
+  [TEvent in keyof SeatLayoutEvents]: {
+    readonly type: TEvent;
+    readonly payload: SeatLayoutEvents[TEvent];
+  };
+}[keyof SeatLayoutEvents];
+
+interface SelectionPanel {
+  readonly root: HTMLDivElement;
+  readonly count: HTMLDivElement;
+  readonly list: HTMLUListElement;
+  readonly clearButton: HTMLButtonElement;
 }
 
 const DEFAULT_LAYOUT: LayoutKind = 'stadium';
@@ -33,6 +50,9 @@ const DEMO_FIXTURE_SEED = 20260712;
 export class DemoApp {
   private renderer: SeatRenderer | null = null;
   private disposed = false;
+  private selectionPanel: SelectionPanel | null = null;
+  private selectedSeatInfo: SeatLayoutSeatInfo[] = [];
+  private readonly unsubscribeRendererEvents: Array<() => void> = [];
 
   private readonly handleResize = () => {
     this.renderer?.requestRender();
@@ -52,6 +72,13 @@ export class DemoApp {
   dispose(): void {
     this.disposed = true;
     window.removeEventListener('resize', this.handleResize);
+    for (const unsubscribe of this.unsubscribeRendererEvents.splice(0)) {
+      unsubscribe();
+    }
+    this.selectionPanel?.root.remove();
+    this.selectionPanel = null;
+    delete (globalThis as typeof globalThis & DemoGlobal).__seatLayoutPickAt;
+    delete (globalThis as typeof globalThis & DemoGlobal).__seatLayoutInteractionLog;
     this.renderer?.dispose();
     this.renderer = null;
   }
@@ -111,13 +138,109 @@ export class DemoApp {
       }
 
       this.renderer = renderer;
-      renderer.loadDocument(this.createDemoDocument());
+      const document = this.createDemoDocument();
+      this.selectedSeatInfo = seatInfoFromDocument(document);
+      this.mountSelectionPanel(renderer);
+      this.attachRendererEvents(renderer);
+      renderer.loadDocument(document);
     } catch (error) {
       this.setStatus({
         state: 'error',
         reason: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  private mountSelectionPanel(renderer: SeatRenderer): void {
+    this.selectionPanel?.root.remove();
+
+    const root = document.createElement('div');
+    root.id = 'seat-selection-panel-root';
+
+    const panel = document.createElement('section');
+    panel.id = 'seat-selection-panel';
+
+    const header = document.createElement('div');
+    header.id = 'seat-selection-header';
+
+    const count = document.createElement('div');
+    count.id = 'seat-selection-count';
+    count.textContent = '0 selected';
+
+    const clearButton = document.createElement('button');
+    clearButton.id = 'seat-selection-clear';
+    clearButton.type = 'button';
+    clearButton.textContent = 'Clear';
+    clearButton.disabled = true;
+    clearButton.addEventListener('click', () => {
+      renderer.clearSelection();
+    });
+
+    const list = document.createElement('ul');
+    list.id = 'seat-selection-list';
+
+    header.append(count, clearButton);
+    panel.append(header, list);
+    root.append(panel);
+    document.body.append(root);
+
+    this.selectionPanel = { root, count, list, clearButton };
+    this.updateSelectionPanel(renderer.getSelection());
+  }
+
+  private attachRendererEvents(renderer: SeatRenderer): void {
+    const global = globalThis as typeof globalThis & DemoGlobal;
+    const interactionLog: DemoInteractionLogEntry[] = [];
+    global.__seatLayoutInteractionLog = interactionLog;
+    global.__seatLayoutPickAt = (clientX: number, clientY: number) =>
+      renderer.pickAtClient(clientX, clientY);
+
+    const logEvent = <TEvent extends keyof SeatLayoutEvents>(
+      type: TEvent,
+      payload: SeatLayoutEvents[TEvent],
+    ) => {
+      interactionLog.push({ type, payload } as DemoInteractionLogEntry);
+
+      if (interactionLog.length > 100) {
+        interactionLog.shift();
+      }
+    };
+
+    this.unsubscribeRendererEvents.push(
+      renderer.on('seatHover', (payload) => {
+        logEvent('seatHover', payload);
+      }),
+      renderer.on('seatSelect', (payload) => {
+        logEvent('seatSelect', payload);
+      }),
+      renderer.on('selectionChange', (payload) => {
+        logEvent('selectionChange', payload);
+        this.updateSelectionPanel(payload.selectedIndices);
+      }),
+    );
+  }
+
+  private updateSelectionPanel(selectedIndices: readonly number[]): void {
+    const panel = this.selectionPanel;
+
+    if (!panel) {
+      return;
+    }
+
+    const count = selectedIndices.length;
+    panel.count.textContent = `${count} selected`;
+    panel.clearButton.disabled = count === 0;
+    panel.list.replaceChildren(
+      ...selectedIndices.map((seatIndex) => {
+        const seat = this.selectedSeatInfo[seatIndex];
+        const item = document.createElement('li');
+        item.dataset.seatIndex = String(seatIndex);
+        item.textContent = seat
+          ? `${seat.sectionName} / Row ${seat.rowLabel} / Seat ${seat.seatLabel}`
+          : `Seat ${seatIndex}`;
+        return item;
+      }),
+    );
   }
 
   private createDemoDocument(): SeatMapDocument {
@@ -175,6 +298,30 @@ function clampSeatCount(value: string | null): number {
   }
 
   return DEMO_SEAT_COUNTS[DEMO_SEAT_COUNTS.length - 1];
+}
+
+function seatInfoFromDocument(document: SeatMapDocument): SeatLayoutSeatInfo[] {
+  const seats: SeatLayoutSeatInfo[] = [];
+  let seatIndex = 0;
+
+  for (const section of document.sections) {
+    for (const row of section.rows) {
+      for (const seat of row.seats) {
+        seats.push({
+          seatIndex,
+          seatId: seat.id,
+          sectionId: section.id,
+          sectionName: section.name,
+          rowId: row.id,
+          rowLabel: row.label,
+          seatLabel: seat.label,
+        });
+        seatIndex += 1;
+      }
+    }
+  }
+
+  return seats;
 }
 
 function createFallbackSeatMap(): SeatMapDocument {
