@@ -16,9 +16,12 @@ export interface WasmRangeBufferView {
   readonly rangeCount: number;
 }
 
+let hasActiveCore = false;
+
 export class SeatLayoutCore {
   private wasmOutput: InitOutput | null = null;
   private memoryBuffer: ArrayBuffer | SharedArrayBuffer | null = null;
+  private disposed = false;
 
   private instancePtrValue = 0;
   private instanceCountValue = 0;
@@ -39,14 +42,29 @@ export class SeatLayoutCore {
   private dirtyRangeCountValue = 0;
   private dirtyRangeView = new Uint32Array();
 
+  constructor() {
+    if (hasActiveCore) {
+      throw new Error(
+        'SeatLayoutCore uses a module-global WASM core; dispose the active instance before creating another',
+      );
+    }
+
+    hasActiveCore = true;
+  }
+
   static async create(initInput?: InitInput | Promise<InitInput>): Promise<SeatLayoutCore> {
     const core = new SeatLayoutCore();
-    await core.initialize(initInput);
+    try {
+      await core.initialize(initInput);
+    } catch (error) {
+      core.dispose();
+      throw error;
+    }
     return core;
   }
 
   get initialized(): boolean {
-    return this.wasmOutput !== null;
+    return !this.disposed && this.wasmOutput !== null;
   }
 
   get instanceCount(): number {
@@ -82,9 +100,38 @@ export class SeatLayoutCore {
   }
 
   async initialize(initInput?: InitInput | Promise<InitInput>): Promise<void> {
+    this.assertNotDisposed();
     if (this.wasmOutput) return;
     this.wasmOutput = await initWasm({ module_or_path: initInput ?? wasmUrl });
     this.refreshViews();
+  }
+
+  dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+
+    this.disposed = true;
+    hasActiveCore = false;
+
+    this.wasmOutput = null;
+    this.memoryBuffer = null;
+    this.instancePtrValue = 0;
+    this.instanceCountValue = 0;
+    this.instanceStrideBytesValue = SEAT_INSTANCE_STRIDE_BYTES;
+    this.instanceF32View = new Float32Array();
+    this.instanceU32View = new Uint32Array();
+    this.instanceBytesView = new Uint8Array();
+    this.visibleRangePtrValue = 0;
+    this.visibleRangeCapacityWords = 0;
+    this.visibleRangeLengthValue = 0;
+    this.visibleRangeCountValue = 0;
+    this.visibleRangeView = new Uint32Array();
+    this.dirtyRangePtrValue = 0;
+    this.dirtyRangeCapacityWords = 0;
+    this.dirtyRangeLengthValue = 0;
+    this.dirtyRangeCountValue = 0;
+    this.dirtyRangeView = new Uint32Array();
   }
 
   loadDocument(doc: SeatMapDocument): void {
@@ -173,10 +220,17 @@ export class SeatLayoutCore {
   }
 
   private requireMemory(): WebAssembly.Memory {
+    this.assertNotDisposed();
     if (!this.wasmOutput) {
       throw new Error('SeatLayoutCore has not been initialized');
     }
     return this.wasmOutput.memory;
+  }
+
+  private assertNotDisposed(): void {
+    if (this.disposed) {
+      throw new Error('SeatLayoutCore has been disposed');
+    }
   }
 
   private assertInitialized(): void {

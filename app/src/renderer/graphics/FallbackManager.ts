@@ -198,26 +198,30 @@ export class GraphicsFallbackManager {
     backend: RenderBackend,
     canvas: HTMLCanvasElement,
   ): Promise<GraphicsBackend> {
-    const nextBackend = await this.backendFactory.createBackend(
-      backend,
-      {
-        onDeviceLost: (event) => {
-          if (event.backend === 'webgpu') {
-            void this.fallbackToWebGl2(`WebGPU device lost: ${event.reason}: ${event.message}`);
-            return;
-          }
-
-          this.options.onDeviceLost?.(event);
-        },
-        onValidationError: (error) => {
-          void this.fallbackToWebGl2(`WebGPU validation error: ${error.message}`);
-        },
-      },
-      canvas,
-    );
+    const nextBackend = await this.createBackend(backend, canvas);
 
     this.activeBackend = nextBackend;
     return nextBackend;
+  }
+
+  private createBackend(backend: RenderBackend, canvas: HTMLCanvasElement): Promise<GraphicsBackend> {
+    return this.backendFactory.createBackend(backend, this.createBackendCallbacks(), canvas);
+  }
+
+  private createBackendCallbacks(): GraphicsBackendCallbacks {
+    return {
+      onDeviceLost: (event) => {
+        if (event.backend === 'webgpu') {
+          void this.fallbackToWebGl2(`WebGPU device lost: ${event.reason}: ${event.message}`);
+          return;
+        }
+
+        this.options.onDeviceLost?.(event);
+      },
+      onValidationError: (error) => {
+        void this.fallbackToWebGl2(`WebGPU validation error: ${error.message}`);
+      },
+    };
   }
 
   private async fallbackToWebGl2(reason: string): Promise<void> {
@@ -237,10 +241,26 @@ export class GraphicsFallbackManager {
     const previousBackend = this.activeBackend?.backend ?? 'webgpu';
 
     try {
-      const replacementCanvas = replaceCanvasForFallback(this.canvas);
-      const nextBackend = await this.activateBackend('webgl2', replacementCanvas);
+      if (this.disposed) {
+        return;
+      }
+
+      const replacementCanvas = cloneCanvasForFallback(this.canvas);
+      const nextBackend = await this.createBackend('webgl2', replacementCanvas);
+
+      if (this.disposed) {
+        nextBackend.device.dispose();
+        return;
+      }
+
+      this.activeBackend = nextBackend;
+      replaceCanvasWithFallback(this.canvas, replacementCanvas);
       this.canvas = replacementCanvas;
       this.options.onCanvasReplaced?.(replacementCanvas);
+
+      if (this.disposed) {
+        return;
+      }
 
       const renderer = this.requireRenderer();
       await renderer.replaceGraphicsBackend(
@@ -248,7 +268,16 @@ export class GraphicsFallbackManager {
         nextBackend.pipeline,
         replacementCanvas,
       );
+
+      if (this.disposed) {
+        return;
+      }
+
       renderer.requestRender();
+
+      if (this.disposed) {
+        return;
+      }
 
       this.fellBackValue = true;
       this.fallbackReasonValue = reason;
@@ -258,6 +287,10 @@ export class GraphicsFallbackManager {
         reason,
       });
     } catch (error) {
+      if (this.disposed) {
+        return;
+      }
+
       const normalizedError = error instanceof Error ? error : new Error(String(error));
       this.options.onError?.(normalizedError);
       throw normalizedError;
@@ -329,7 +362,7 @@ export function forcedBackendFromSearch(search: string): RenderBackend | null {
   return backend === 'webgpu' || backend === 'webgl2' ? backend : null;
 }
 
-function createDefaultBackendFactory(): GraphicsBackendFactory {
+export function createDefaultBackendFactory(): GraphicsBackendFactory {
   return {
     detectWebGpuSupport: () => WebGpuDevice.detectSupport(),
     async createBackend(
@@ -339,14 +372,19 @@ function createDefaultBackendFactory(): GraphicsBackendFactory {
     ): Promise<GraphicsBackend> {
       if (backend === 'webgpu') {
         const device = new WebGpuDevice(canvas, callbacks);
-        await device.initialize();
-        const pipeline = await WebGpuSeatPipeline.create(device);
-        return {
-          backend,
-          device,
-          pipeline,
-          getValidationError: () => device.getValidationError(),
-        };
+        try {
+          await device.initialize();
+          const pipeline = await WebGpuSeatPipeline.create(device);
+          return {
+            backend,
+            device,
+            pipeline,
+            getValidationError: () => device.getValidationError(),
+          };
+        } catch (error) {
+          device.dispose();
+          throw error;
+        }
       }
 
       const device = new WebGl2Device(canvas, {
@@ -377,6 +415,12 @@ function evaluateBlocklist(rules: readonly WebGpuBlocklistRule[]): string[] {
 }
 
 function replaceCanvasForFallback(canvas: HTMLCanvasElement): HTMLCanvasElement {
+  const replacement = cloneCanvasForFallback(canvas);
+  replaceCanvasWithFallback(canvas, replacement);
+  return replacement;
+}
+
+function cloneCanvasForFallback(canvas: HTMLCanvasElement): HTMLCanvasElement {
   const replacement = canvas.cloneNode(false) as HTMLCanvasElement;
   replacement.width = canvas.width;
   replacement.height = canvas.height;
@@ -387,8 +431,14 @@ function replaceCanvasForFallback(canvas: HTMLCanvasElement): HTMLCanvasElement 
     replacement.dataset.rendererReason = canvas.dataset.rendererReason;
   }
 
-  canvas.replaceWith(replacement);
   return replacement;
+}
+
+function replaceCanvasWithFallback(
+  canvas: HTMLCanvasElement,
+  replacement: HTMLCanvasElement,
+): void {
+  canvas.replaceWith(replacement);
 }
 
 function wait(ms: number): Promise<void> {

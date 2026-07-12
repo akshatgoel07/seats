@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateSeatMap } from '../../fixtures/generate';
 import {
   SEAT_INSTANCE_STRIDE_BYTES,
@@ -72,7 +72,17 @@ beforeAll(async () => {
   console.log(`[wasm-core bench] rebuild 100k: ${rebuildMs.toFixed(3)} ms`);
 });
 
+afterAll(() => {
+  core.dispose();
+});
+
 describe('SeatLayoutCore wasm integration', () => {
+  it('rejects a second live wrapper for the module-global WASM core', async () => {
+    await expect(SeatLayoutCore.create()).rejects.toThrow(
+      'SeatLayoutCore uses a module-global WASM core',
+    );
+  });
+
   it('loads the 100k grid fixture and exposes the instance buffer views', () => {
     expect(core.initialized).toBe(true);
     expect(core.instanceCount).toBe(SEAT_COUNT);
@@ -140,5 +150,19 @@ describe('SeatLayoutCore wasm integration', () => {
 
     expect(p50BatchMs).toBeGreaterThanOrEqual(0);
     expect(rebuildMs).toBeGreaterThan(0);
+  });
+
+  it('allows a new wrapper after the previous wrapper is disposed', async () => {
+    const wasmBytes = await readFile(
+      new URL('../../generated/wasm/seat_layout_core/seat_layout_core_bg.wasm', import.meta.url),
+    );
+
+    core.dispose();
+    const recreated = await SeatLayoutCore.create(wasmBytes);
+    expect(recreated.initialized).toBe(true);
+    recreated.dispose();
+
+    core = await SeatLayoutCore.create(wasmBytes);
+    core.loadFlattened(flat);
   });
 });

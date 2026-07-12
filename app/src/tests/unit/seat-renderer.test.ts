@@ -193,6 +193,7 @@ describe('SeatRenderer', () => {
     expect(renderer.getFrameStats().lastDrawRangeCount).toBe(1);
 
     renderer.dispose();
+    core.dispose();
   });
 });
 

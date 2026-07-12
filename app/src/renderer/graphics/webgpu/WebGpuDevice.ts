@@ -8,6 +8,7 @@ import {
   alignTo,
   coalesceInstanceDirtyRanges,
   createUniformBatch,
+  uniformStructByteLength,
   uniformStructBytes,
   type DrawInstanceRange,
   type GraphicsBuffer,
@@ -270,6 +271,14 @@ export class WebGpuDevice implements GraphicsDevice {
     instanceRange: DrawInstanceRange,
   ): void {
     this.throwIfValidationFailed();
+    const uniformByteLength = uniformStructByteLength(uniformStructData);
+
+    if (uniformByteLength !== pipeline.uniformStructSizeBytes) {
+      throw new Error(
+        `Expected ${pipeline.uniformStructSizeBytes} uniform bytes for pipeline ${pipeline.id}, received ${uniformByteLength}`,
+      );
+    }
+
     this.encodedDraws.push({
       uniformStructData,
       pipeline: pipeline as GraphicsPipeline<WebGpuRenderPassEncoder>,

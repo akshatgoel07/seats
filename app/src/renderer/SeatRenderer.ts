@@ -89,6 +89,7 @@ export interface SeatLayoutCoreLike {
   hitTest(x: number, y: number, radius: number): number;
   setStateFlags(index: number, flags: number): boolean;
   clearDirtyRanges(): void;
+  dispose?(): void;
 }
 
 interface DeviceWithDrawingBufferSize extends GraphicsDevice {
@@ -120,6 +121,7 @@ export class SeatRenderer {
   readonly camera = new Camera2D();
 
   private core: SeatLayoutCoreLike | null = null;
+  private ownsCore = false;
   private device: GraphicsDevice | null = null;
   private pipeline: GraphicsPipeline<unknown> | null = null;
   private instanceBuffer: GraphicsBuffer | null = null;
@@ -170,27 +172,52 @@ export class SeatRenderer {
       return;
     }
 
+    const ownsCore = !this.options.core;
     const core = this.options.core ?? (await SeatLayoutCore.create());
+
+    if (this.disposed) {
+      if (ownsCore) {
+        core.dispose?.();
+      }
+      return;
+    }
+
     const device = this.options.device ?? this.createDefaultDevice();
-    await device.initialize();
+    try {
+      await device.initialize();
 
-    if (this.disposed) {
+      if (this.disposed) {
+        device.dispose();
+        if (ownsCore) {
+          core.dispose?.();
+        }
+        return;
+      }
+
+      const pipeline =
+        this.options.pipeline ??
+        (await (this.options.createPipeline ?? createDefaultPipeline)(device));
+
+      if (this.disposed) {
+        device.dispose();
+        if (ownsCore) {
+          core.dispose?.();
+        }
+        return;
+      }
+
+      this.core = core;
+      this.ownsCore = ownsCore;
+      this.device = device;
+      this.pipeline = pipeline;
+    } catch (error) {
       device.dispose();
-      return;
+      if (ownsCore) {
+        core.dispose?.();
+      }
+      throw error;
     }
 
-    const pipeline =
-      this.options.pipeline ??
-      (await (this.options.createPipeline ?? createDefaultPipeline)(device));
-
-    if (this.disposed) {
-      device.dispose();
-      return;
-    }
-
-    this.core = core;
-    this.device = device;
-    this.pipeline = pipeline;
     this.syncViewport();
 
     if (this.options.attachCameraEvents !== false) {
@@ -407,6 +434,10 @@ export class SeatRenderer {
     this.device?.dispose();
     this.device = null;
     this.pipeline = null;
+    if (this.ownsCore) {
+      this.core?.dispose?.();
+    }
+    this.ownsCore = false;
     this.core = null;
   }
 
