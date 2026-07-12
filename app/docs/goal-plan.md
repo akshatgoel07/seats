@@ -1,6 +1,6 @@
 # Goal plan: seat-layout-v4 — WebGPU + WebAssembly seat map renderer
 
-Status: **Plan approved for execution. Blocked on Codex CLI re-authentication (see §8).**
+Status: **COMPLETE (2026-07-12).** All tasks T0–T10 delivered and verified; both independent reviews returned no blocking findings; all §4 budgets PASS on recorded baselines (see `app/docs/benchmarks/`). Residual non-blocking follow-ups for v4.1 are listed in §9.
 Owner: Fable (planning and orchestration only, per `agent-responsibility-and-model-routing.md`).
 Reference architecture: [Figma — Rendering powered by WebGPU](https://www.figma.com/blog/figma-rendering-powered-by-webgpu/).
 
@@ -131,6 +131,22 @@ After T7 and after T9, a separate Codex subagent independently reviews the high-
 4. Both independent reviews completed and their blocking findings resolved.
 5. Final implementation summary produced by Fable from verified results.
 
-## 8. Current blocker
+## 8. Resolved blockers (execution log)
 
-Codex CLI is installed (0.144.1) and configured, but the stored ChatGPT token can no longer be refreshed — every task turn fails with `Your access token could not be refreshed. Please log out and sign in again.` All implementation is Codex-owned, so execution cannot start until the user re-authenticates by running `codex login` (interactive). First action after auth: probe/validate the model IDs for the "5.6 SOL" and "4.8" tiers, then dispatch T0.
+- Codex CLI token expired → user re-authenticated via `codex login`; a stale pre-login `codex app-server` also had to be killed once.
+- Codex sandbox had no network → enabled `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml` (backup: `config.toml.bak-20260712`).
+- Codex sandbox blocked `.git` creation → granted the repo's `.git` path as an explicit `writable_roots` entry so Codex subagents could commit.
+- `wasm32-unknown-unknown` unavailable in Homebrew Rust → provisioned rustup stable (rustc 1.97.0) + wasm-pack 0.15.0 (ADR §Context fallback path).
+- Headless Chromium lacks WebGPU (and real WebGL2 in-sandbox) → all rendering evidence was verified by the orchestrator in real Chrome (Playwright `channel: 'chrome'`, headed); WebGPU e2e specs are env-gated behind `ENABLE_WEBGPU_E2E`.
+- T4 initially shipped invalid WGSL (missing `@interpolate(flat)` on integral varyings) that only real-browser verification caught — fixed, plus GPU error surfacing and a static shader contract test.
+
+## 9. Residual non-blocking follow-ups (v4.1 candidates)
+
+From the second independent review (verdict: APPROVED):
+
+1. `FallbackManager.ts:120-152, 197-204` — add disposal re-checks after awaits during *initial* backend creation (the fallback path already has them).
+2. `scripts/bench.mjs:90-99` + `BenchApp.ts:190-196` — decide whether budget PASS should also gate on `panZoom.minFps`, not only average FPS.
+3. `BenchApp.ts:141-218` — reset the camera to a deterministic pose before the hit-test phase.
+4. `scripts/bench.mjs:225-274` — "Latest baseline" README line can go stale; regenerate it on every run.
+
+Deferred product scope (§3): seat text labels (`TODO_SEAT_LABEL_MIN_SCREEN_PX`), seat-map editing, server rendering, per-seat accessibility tree.
