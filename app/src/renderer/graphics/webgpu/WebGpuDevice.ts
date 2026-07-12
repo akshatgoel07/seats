@@ -115,6 +115,10 @@ export class WebGpuDevice implements GraphicsDevice {
   }
 
   async initialize(): Promise<void> {
+    if (this.device && this.context) {
+      return;
+    }
+
     const gpu = getNavigatorGpu();
 
     if (!gpu) {
@@ -361,6 +365,10 @@ export class WebGpuDevice implements GraphicsDevice {
       width: this.drawingBufferWidth,
       height: this.drawingBufferHeight,
     };
+  }
+
+  getValidationError(): Error | null {
+    return this.validationError;
   }
 
   private async createValidatedShaderModuleAsync(descriptor: {

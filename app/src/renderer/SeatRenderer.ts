@@ -14,6 +14,8 @@ import {
   type SeatPalette,
   writeSeatUniformData,
 } from './graphics/shaders/shader-contract';
+import { WebGl2Device } from './graphics/webgl2/WebGl2Device';
+import { WebGl2SeatPipeline } from './graphics/webgl2/WebGl2SeatPipeline';
 import { WebGpuDevice } from './graphics/webgpu/WebGpuDevice';
 import { WebGpuSeatPipeline } from './graphics/webgpu/WebGpuSeatPipeline';
 import { Camera2D, type CameraRect } from './camera/Camera2D';
@@ -156,7 +158,7 @@ export class SeatRenderer {
   };
 
   constructor(
-    private readonly canvas: HTMLCanvasElement,
+    private canvas: HTMLCanvasElement,
     private readonly options: SeatRendererOptions = {},
   ) {
     this.palette = options.palette ?? DEFAULT_SEAT_PALETTE;
@@ -204,6 +206,10 @@ export class SeatRenderer {
 
   backendName(): RenderBackend {
     return this.requireDevice().backend;
+  }
+
+  getCanvas(): HTMLCanvasElement {
+    return this.canvas;
   }
 
   get instanceCount(): number {
@@ -309,6 +315,71 @@ export class SeatRenderer {
     }
 
     this.renderFrame();
+  }
+
+  async replaceGraphicsBackend(
+    device: GraphicsDevice,
+    pipeline?: GraphicsPipeline<unknown>,
+    canvas: HTMLCanvasElement = this.canvas,
+  ): Promise<void> {
+    await device.initialize();
+
+    const nextPipeline =
+      pipeline ?? (await (this.options.createPipeline ?? createDefaultPipeline)(device));
+
+    if (this.disposed) {
+      device.dispose();
+      return;
+    }
+
+    const previousDevice = this.device;
+    const previousInstanceBuffer = this.instanceBuffer;
+    const canvasChanged = canvas !== this.canvas;
+
+    if (canvasChanged) {
+      this.detachCameraEvents?.();
+      this.detachCameraEvents = null;
+      this.detachInteractionEvents?.();
+      this.detachInteractionEvents = null;
+      this.setCanvasCursor(false);
+      this.canvas = canvas;
+    }
+
+    previousInstanceBuffer?.dispose();
+    this.instanceBuffer = null;
+    this.device = device;
+    this.pipeline = nextPipeline;
+    previousDevice?.dispose();
+    this.syncViewport();
+
+    const core = this.core;
+
+    if (core && this.loaded) {
+      this.recreateInstanceBuffer(device, core);
+
+      if (core.instanceViews.bytes.byteLength > 0) {
+        device.uploadBuffer(this.requireInstanceBuffer(), core.instanceViews.bytes);
+      }
+
+      core.clearDirtyRanges();
+      this.refreshSelectionFromCore();
+    }
+
+    if (canvasChanged) {
+      if (this.options.attachCameraEvents !== false) {
+        this.detachCameraEvents = this.camera.attachToElement(this.canvas, () => {
+          this.requestRender();
+        });
+      }
+
+      if (this.options.attachInteractionEvents ?? this.options.attachCameraEvents !== false) {
+        this.detachInteractionEvents = this.attachInteractionEvents();
+      }
+    }
+
+    if (this.loaded) {
+      this.requestRender();
+    }
   }
 
   dispose(): void {
@@ -634,6 +705,18 @@ export class SeatRenderer {
     }
   }
 
+  private refreshSelectionFromCore(): void {
+    const core = this.requireCore();
+
+    this.selectedSeatIndices.clear();
+
+    for (let index = 0; index < core.instanceCount; index += 1) {
+      if ((this.seatStateFlags(index) & SEAT_STATE_FLAG_SELECTED) !== 0) {
+        this.selectedSeatIndices.add(index);
+      }
+    }
+  }
+
   private renderFrame(): void {
     const start = this.now();
     this.dirty = false;
@@ -875,6 +958,10 @@ export class SeatRenderer {
 async function createDefaultPipeline(device: GraphicsDevice): Promise<GraphicsPipeline<unknown>> {
   if (device instanceof WebGpuDevice) {
     return WebGpuSeatPipeline.create(device);
+  }
+
+  if (device instanceof WebGl2Device) {
+    return WebGl2SeatPipeline.create(device);
   }
 
   throw new Error(`No seat pipeline factory configured for ${device.backend}`);

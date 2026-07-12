@@ -48,6 +48,59 @@ export const SEAT_INSTANCE_WEBGPU_VERTEX_BUFFER_LAYOUT = {
   attributes: SEAT_INSTANCE_WEBGPU_ATTRIBUTES,
 } as const satisfies StableDescriptorValue;
 
+export const SEAT_INSTANCE_WEBGL2_ATTRIBUTES = [
+  {
+    field: 'position',
+    location: SEAT_ATTRIBUTE_LOCATION_POSITION,
+    size: 2,
+    type: 'FLOAT',
+    integer: false,
+    normalized: false,
+    stride: SEAT_INSTANCE_STRIDE_BYTES,
+    offset: SEAT_INSTANCE_X_OFFSET_BYTES,
+    divisor: 1,
+  },
+  {
+    field: 'sizeRotation',
+    location: SEAT_ATTRIBUTE_LOCATION_SIZE_ROTATION,
+    size: 2,
+    type: 'FLOAT',
+    integer: false,
+    normalized: false,
+    stride: SEAT_INSTANCE_STRIDE_BYTES,
+    offset: SEAT_INSTANCE_SIZE_OFFSET_BYTES,
+    divisor: 1,
+  },
+  {
+    field: 'colorIndex',
+    location: SEAT_ATTRIBUTE_LOCATION_COLOR_INDEX,
+    size: 1,
+    type: 'UNSIGNED_INT',
+    integer: true,
+    normalized: false,
+    stride: SEAT_INSTANCE_STRIDE_BYTES,
+    offset: SEAT_INSTANCE_COLOR_INDEX_OFFSET_BYTES,
+    divisor: 1,
+  },
+  {
+    field: 'stateFlags',
+    location: SEAT_ATTRIBUTE_LOCATION_STATE_FLAGS,
+    size: 1,
+    type: 'UNSIGNED_INT',
+    integer: true,
+    normalized: false,
+    stride: SEAT_INSTANCE_STRIDE_BYTES,
+    offset: SEAT_INSTANCE_STATE_FLAGS_OFFSET_BYTES,
+    divisor: 1,
+  },
+] as const;
+
+export const SEAT_INSTANCE_WEBGL2_VERTEX_BUFFER_LAYOUT = {
+  arrayStride: SEAT_INSTANCE_STRIDE_BYTES,
+  stepMode: 'instance',
+  attributes: SEAT_INSTANCE_WEBGL2_ATTRIBUTES,
+} as const satisfies StableDescriptorValue;
+
 export const SEAT_UNIFORM_BIND_GROUP = 0;
 export const SEAT_UNIFORM_BINDING = 0;
 export const SEAT_UNIFORM_VIEW_PROJECTION_OFFSET_BYTES = 0;

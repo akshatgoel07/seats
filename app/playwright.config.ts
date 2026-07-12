@@ -1,7 +1,10 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const enableWebGpuE2e = process.env.ENABLE_WEBGPU_E2E === '1';
+
 export default defineConfig({
   testDir: './src/tests/e2e',
+  workers: 1,
   use: {
     baseURL: 'http://127.0.0.1:4173',
   },
@@ -16,14 +19,19 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        viewport: {
+          width: 640,
+          height: 480,
+        },
+        deviceScaleFactor: 1,
         launchOptions: {
           args: [
             '--single-process',
             '--no-zygote',
-            '--enable-unsafe-webgpu',
-            '--enable-features=WebGPU',
-            '--disable-features=SkiaGraphite',
             '--ignore-gpu-blocklist',
+            ...(enableWebGpuE2e
+              ? ['--enable-unsafe-webgpu', '--enable-features=WebGPU', '--disable-features=SkiaGraphite']
+              : ['--disable-gpu', '--disable-software-rasterizer']),
           ],
         },
       },

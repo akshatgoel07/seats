@@ -1,14 +1,23 @@
 import { generateSeatMap, type LayoutKind } from '../fixtures/generate';
 import { SeatRenderer } from '../renderer/SeatRenderer';
+import {
+  GraphicsFallbackManager,
+} from '../renderer/graphics/FallbackManager';
+import { GraphicsDeviceUnsupportedError } from '../renderer/graphics/GraphicsDevice';
 import type { RenderBackend } from '../renderer/graphics/RenderTypes';
-import { WebGpuDevice } from '../renderer/graphics/webgpu/WebGpuDevice';
 import type { SeatLayoutEvents, SeatLayoutSeatInfo } from '../shared/events';
 import type { Seat, SeatCategory, SeatMapDocument } from '../shared/seat-map';
 
 export type DemoRenderStatus =
   | { readonly state: 'initializing' }
   | { readonly state: 'unsupported'; readonly reason: string }
-  | { readonly state: 'rendered'; readonly backend: RenderBackend; readonly instanceCount: number }
+  | {
+      readonly state: 'rendered';
+      readonly backend: RenderBackend;
+      readonly instanceCount: number;
+      readonly fellBack?: boolean;
+      readonly reason?: string;
+    }
   | { readonly state: 'lost'; readonly reason: string; readonly message: string }
   | { readonly state: 'error'; readonly reason: string };
 
@@ -49,21 +58,24 @@ const DEMO_FIXTURE_SEED = 20260712;
 
 export class DemoApp {
   private renderer: SeatRenderer | null = null;
+  private fallbackManager: GraphicsFallbackManager | null = null;
   private disposed = false;
   private selectionPanel: SelectionPanel | null = null;
   private selectedSeatInfo: SeatLayoutSeatInfo[] = [];
   private readonly unsubscribeRendererEvents: Array<() => void> = [];
 
   private readonly handleResize = () => {
+    resizeCanvasElement(this.canvas);
     this.renderer?.requestRender();
   };
 
   constructor(
-    private readonly canvas: HTMLCanvasElement,
+    private canvas: HTMLCanvasElement,
     private readonly options: DemoAppOptions = {},
   ) {}
 
   mount(): void {
+    resizeCanvasElement(this.canvas);
     this.setStatus({ state: 'initializing' });
     window.addEventListener('resize', this.handleResize);
     void this.start();
@@ -79,24 +91,25 @@ export class DemoApp {
     this.selectionPanel = null;
     delete (globalThis as typeof globalThis & DemoGlobal).__seatLayoutPickAt;
     delete (globalThis as typeof globalThis & DemoGlobal).__seatLayoutInteractionLog;
+    this.fallbackManager?.dispose();
+    this.fallbackManager = null;
     this.renderer?.dispose();
     this.renderer = null;
   }
 
   private async start(): Promise<void> {
-    const supportStatus = await WebGpuDevice.detectSupport();
-
-    if (!supportStatus.supported) {
-      this.setStatus({
-        state: 'unsupported',
-        reason: supportStatus.reason ?? 'WebGPU is unavailable',
-      });
-      return;
-    }
-
     try {
       let reportedFirstFrame = false;
-      const renderer = new SeatRenderer(this.canvas, {
+      let scheduledFaultInjection = false;
+      const fallbackManager = new GraphicsFallbackManager(this.canvas, {
+        search: this.options.search ?? window.location.search,
+        onCanvasReplaced: (canvas) => {
+          this.canvas = canvas;
+          resizeCanvasElement(this.canvas);
+        },
+        onFallback: () => {
+          this.handleFallback();
+        },
         onDeviceLost: (event) => {
           this.setStatus({
             state: 'lost',
@@ -104,12 +117,19 @@ export class DemoApp {
             message: event.message,
           });
         },
-        onValidationError: (error) => {
+        onError: (error) => {
           this.setStatus({
             state: 'error',
             reason: error.message,
           });
         },
+      });
+      this.fallbackManager = fallbackManager;
+      const backend = await fallbackManager.createInitialBackend();
+      this.canvas = fallbackManager.getCanvas();
+      const renderer = new SeatRenderer(this.canvas, {
+        device: backend.device,
+        pipeline: backend.pipeline,
         onError: (error) => {
           this.setStatus({
             state: 'error',
@@ -122,13 +142,16 @@ export class DemoApp {
           }
 
           reportedFirstFrame = true;
-          this.setStatus({
-            state: 'rendered',
-            backend: renderer.backendName(),
-            instanceCount: renderer.instanceCount,
-          });
+          this.setRenderedStatus();
+          void fallbackManager.runWebGpuPostLoadSelfTest(renderer);
+
+          if (!scheduledFaultInjection) {
+            scheduledFaultInjection = true;
+            this.scheduleForcedGpuFailure(fallbackManager);
+          }
         },
       });
+      fallbackManager.attachRenderer(renderer);
 
       await renderer.initialize();
 
@@ -144,11 +167,48 @@ export class DemoApp {
       this.attachRendererEvents(renderer);
       renderer.loadDocument(document);
     } catch (error) {
-      this.setStatus({
-        state: 'error',
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      const reason = error instanceof Error ? error.message : String(error);
+
+      if (error instanceof GraphicsDeviceUnsupportedError) {
+        this.setStatus({ state: 'unsupported', reason });
+      } else {
+        this.setStatus({ state: 'error', reason });
+      }
     }
+  }
+
+  private handleFallback(): void {
+    this.setRenderedStatus();
+  }
+
+  private setRenderedStatus(): void {
+    const renderer = this.renderer;
+
+    if (!renderer) {
+      return;
+    }
+
+    const fallbackManager = this.fallbackManager;
+    const reason = fallbackManager?.fallbackReason ?? undefined;
+
+    this.setStatus({
+      state: 'rendered',
+      backend: renderer.backendName(),
+      instanceCount: renderer.instanceCount,
+      ...(fallbackManager?.fellBack ? { fellBack: true, reason } : {}),
+    });
+  }
+
+  private scheduleForcedGpuFailure(fallbackManager: GraphicsFallbackManager): void {
+    const delayMs = failGpuAfterMs(this.options.search ?? window.location.search);
+
+    if (delayMs === null) {
+      return;
+    }
+
+    window.setTimeout(() => {
+      void fallbackManager.forceWebGpuFailure(`forced WebGPU failure after ${delayMs}ms`);
+    }, delayMs);
   }
 
   private mountSelectionPanel(renderer: SeatRenderer): void {
@@ -282,6 +342,29 @@ function parseFixtureSelection(search: string): FixtureSelection {
     layout,
     seatCount: clampSeatCount(params.get('seats')),
   };
+}
+
+function failGpuAfterMs(search: string): number | null {
+  const value = new URLSearchParams(search).get('failGpuAfterMs');
+
+  if (value === null) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function resizeCanvasElement(canvas: HTMLCanvasElement): void {
+  const dpr = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.floor(window.innerWidth * dpr));
+  const height = Math.max(1, Math.floor(window.innerHeight * dpr));
+
+  canvas.width = width;
+  canvas.height = height;
+  canvas.style.width = `${window.innerWidth}px`;
+  canvas.style.height = `${window.innerHeight}px`;
 }
 
 function clampSeatCount(value: string | null): number {
