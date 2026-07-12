@@ -1,0 +1,9 @@
+node_modules/
+dist/
+app/node_modules/
+app/dist/
+target/
+app/src/generated/
+app/src/fixtures/generated/
+playwright-report/
+test-results/
