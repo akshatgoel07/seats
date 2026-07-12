@@ -23,7 +23,7 @@ interface PngImage {
   readonly rgba: Uint8Array;
 }
 
-test('renders the 10k WebGPU demo scene with non-background pixels', async ({ page }) => {
+test('renders and zooms the 10k stadium WebGPU demo scene', async ({ page }) => {
   await page.setViewportSize({ width: 960, height: 720 });
   const support = await page.evaluate(async () => {
     const gpu = (navigator as BrowserNavigatorWithGpu).gpu;
@@ -57,7 +57,7 @@ test('renders the 10k WebGPU demo scene with non-background pixels', async ({ pa
     return;
   }
 
-  await page.goto('/');
+  await page.goto('/?layout=stadium&seats=10000');
   await page.waitForFunction(() => {
     const host = globalThis as typeof globalThis & {
       __seatLayoutDemoStatus?: { readonly state: string };
@@ -93,6 +93,38 @@ test('renders the 10k WebGPU demo scene with non-background pixels', async ({ pa
   const nonBackgroundRatio = countNonWhitePixels(png) / (png.width * png.height);
 
   expect(nonBackgroundRatio).toBeGreaterThan(0.01);
+
+  const frameCountBeforeZoom = await page.evaluate(() => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutFrameStats?: { readonly frameCount: number };
+    };
+
+    return host.__seatLayoutFrameStats?.frameCount ?? 0;
+  });
+  const canvasBox = await canvas.boundingBox();
+
+  expect(canvasBox).not.toBeNull();
+
+  if (!canvasBox) {
+    return;
+  }
+
+  await page.mouse.move(canvasBox.x + canvasBox.width * 0.5, canvasBox.y + canvasBox.height * 0.5);
+  await page.mouse.wheel(0, -720);
+  await page.waitForFunction((previousFrameCount) => {
+    const host = globalThis as typeof globalThis & {
+      __seatLayoutFrameStats?: { readonly frameCount: number };
+    };
+
+    return (host.__seatLayoutFrameStats?.frameCount ?? 0) > previousFrameCount;
+  }, frameCountBeforeZoom);
+
+  const zoomedScreenshot = await canvas.screenshot();
+  const zoomedPng = decodePngRgba(zoomedScreenshot);
+  const zoomedNonBackgroundRatio =
+    countNonWhitePixels(zoomedPng) / (zoomedPng.width * zoomedPng.height);
+
+  expect(zoomedNonBackgroundRatio).toBeGreaterThan(0.005);
 });
 
 function countNonWhitePixels(image: PngImage): number {

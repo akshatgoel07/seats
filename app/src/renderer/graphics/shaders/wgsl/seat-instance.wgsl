@@ -1,4 +1,5 @@
 const PALETTE_COLOR_COUNT: u32 = 16u;
+const LOD_DOTS: u32 = 0u;
 const STATE_SELECTED: u32 = 1u;
 const STATE_HOVERED: u32 = 2u;
 const STATE_UNAVAILABLE: u32 = 4u;
@@ -6,6 +7,7 @@ const STATE_UNAVAILABLE: u32 = 4u;
 struct SeatUniforms {
   viewProjection: mat4x4<f32>,
   palette: array<vec4<f32>, 16>,
+  renderOptions: vec4<u32>,
 };
 
 struct VertexInput {
@@ -86,19 +88,21 @@ fn fs_main(input: FragmentInput) -> @location(0) vec4<f32> {
 
   var rgb = paletteColor.rgb;
 
-  if (hasFlag(input.stateFlags, STATE_SELECTED)) {
-    let ring = 1.0 - smoothstep(0.025, 0.075, abs(distanceFromCenter - 0.78));
-    rgb = mix(rgb, vec3<f32>(1.0, 0.96, 0.55), ring * 0.88);
-    rgb = mix(rgb, vec3<f32>(1.0), 0.16);
-  }
+  if (uniforms.renderOptions.x != LOD_DOTS) {
+    if (hasFlag(input.stateFlags, STATE_SELECTED)) {
+      let ring = 1.0 - smoothstep(0.025, 0.075, abs(distanceFromCenter - 0.78));
+      rgb = mix(rgb, vec3<f32>(1.0, 0.96, 0.55), ring * 0.88);
+      rgb = mix(rgb, vec3<f32>(1.0), 0.16);
+    }
 
-  if (hasFlag(input.stateFlags, STATE_HOVERED)) {
-    rgb = mix(rgb, vec3<f32>(1.0), 0.22);
-  }
+    if (hasFlag(input.stateFlags, STATE_HOVERED)) {
+      rgb = mix(rgb, vec3<f32>(1.0), 0.22);
+    }
 
-  if (hasFlag(input.stateFlags, STATE_UNAVAILABLE)) {
-    let gray = dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
-    rgb = mix(rgb, vec3<f32>(gray), 0.72) * 0.58;
+    if (hasFlag(input.stateFlags, STATE_UNAVAILABLE)) {
+      let gray = dot(rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+      rgb = mix(rgb, vec3<f32>(gray), 0.72) * 0.58;
+    }
   }
 
   return vec4<f32>(rgb, paletteColor.a * edgeAlpha);

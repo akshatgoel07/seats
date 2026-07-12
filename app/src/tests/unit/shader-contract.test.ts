@@ -15,6 +15,7 @@ import {
   SEAT_INSTANCE_WEBGPU_VERTEX_BUFFER_LAYOUT,
   SEAT_PALETTE_COLOR_COUNT,
   SEAT_UNIFORM_PALETTE_OFFSET_BYTES,
+  SEAT_UNIFORM_RENDER_OPTIONS_OFFSET_BYTES,
   SEAT_UNIFORM_STRUCT_SIZE_BYTES,
   SEAT_UNIFORM_VIEW_PROJECTION_OFFSET_BYTES,
 } from '../../renderer/graphics/shaders/shader-contract';
@@ -60,8 +61,9 @@ describe('shader contract', () => {
   it('keeps the seat uniform struct size explicit', () => {
     expect(SEAT_UNIFORM_VIEW_PROJECTION_OFFSET_BYTES).toBe(0);
     expect(SEAT_UNIFORM_PALETTE_OFFSET_BYTES).toBe(64);
+    expect(SEAT_UNIFORM_RENDER_OPTIONS_OFFSET_BYTES).toBe(320);
     expect(SEAT_PALETTE_COLOR_COUNT).toBe(16);
-    expect(SEAT_UNIFORM_STRUCT_SIZE_BYTES).toBe(320);
+    expect(SEAT_UNIFORM_STRUCT_SIZE_BYTES).toBe(336);
   });
 
   it('uses flat interpolation for every integral inter-stage WGSL value', () => {

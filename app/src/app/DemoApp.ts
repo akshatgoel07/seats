@@ -1,66 +1,41 @@
-import {
-  SEAT_INSTANCE_COLOR_INDEX_OFFSET_BYTES,
-  SEAT_INSTANCE_ROTATION_OFFSET_BYTES,
-  SEAT_INSTANCE_SIZE_OFFSET_BYTES,
-  SEAT_INSTANCE_STATE_FLAGS_OFFSET_BYTES,
-  SEAT_INSTANCE_STRIDE_BYTES,
-  SEAT_INSTANCE_X_OFFSET_BYTES,
-  SEAT_INSTANCE_Y_OFFSET_BYTES,
-  SEAT_STATE_FLAG_HOVERED,
-  SEAT_STATE_FLAG_SELECTED,
-  SEAT_STATE_FLAG_UNAVAILABLE,
-} from '../shared/instance-layout';
-import type { GraphicsBuffer } from '../renderer/graphics/RenderTypes';
-import {
-  DEFAULT_SEAT_PALETTE,
-  SEAT_PALETTE_COLOR_COUNT,
-  createSeatUniformData,
-} from '../renderer/graphics/shaders/shader-contract';
+import { generateSeatMap, type LayoutKind } from '../fixtures/generate';
+import { SeatRenderer } from '../renderer/SeatRenderer';
+import type { RenderBackend } from '../renderer/graphics/RenderTypes';
 import { WebGpuDevice } from '../renderer/graphics/webgpu/WebGpuDevice';
-import { WebGpuSeatPipeline } from '../renderer/graphics/webgpu/WebGpuSeatPipeline';
+import type { Seat, SeatCategory, SeatMapDocument } from '../shared/seat-map';
 
 export type DemoRenderStatus =
   | { readonly state: 'initializing' }
   | { readonly state: 'unsupported'; readonly reason: string }
-  | { readonly state: 'rendered'; readonly backend: 'webgpu'; readonly instanceCount: number }
+  | { readonly state: 'rendered'; readonly backend: RenderBackend; readonly instanceCount: number }
   | { readonly state: 'lost'; readonly reason: string; readonly message: string }
   | { readonly state: 'error'; readonly reason: string };
 
 export interface DemoAppOptions {
-  readonly rows?: number;
-  readonly columns?: number;
+  readonly search?: string;
 }
 
 interface DemoGlobal {
   __seatLayoutDemoStatus?: DemoRenderStatus;
 }
 
-interface DemoInstanceData {
-  readonly data: Uint8Array;
-  readonly instanceCount: number;
-  readonly bounds: Bounds;
+interface FixtureSelection {
+  readonly layout: LayoutKind;
+  readonly seatCount: number;
 }
 
-interface Bounds {
-  readonly minX: number;
-  readonly minY: number;
-  readonly maxX: number;
-  readonly maxY: number;
-}
+const DEFAULT_LAYOUT: LayoutKind = 'stadium';
+const DEFAULT_SEAT_COUNT = 10_000;
+const DEMO_SEAT_COUNTS = [1_000, 10_000, 100_000, 250_000] as const;
+const DEMO_LAYOUTS = new Set<LayoutKind>(['grid', 'arena', 'stadium']);
+const DEMO_FIXTURE_SEED = 20260712;
 
 export class DemoApp {
-  private device: WebGpuDevice | null = null;
-  private pipeline: WebGpuSeatPipeline | null = null;
-  private instanceBuffer: GraphicsBuffer | null = null;
-  private instanceData: DemoInstanceData | null = null;
+  private renderer: SeatRenderer | null = null;
   private disposed = false;
 
   private readonly handleResize = () => {
-    if (!this.device || !this.pipeline || !this.instanceBuffer || !this.instanceData) {
-      return;
-    }
-
-    this.render();
+    this.renderer?.requestRender();
   };
 
   constructor(
@@ -77,8 +52,8 @@ export class DemoApp {
   dispose(): void {
     this.disposed = true;
     window.removeEventListener('resize', this.handleResize);
-    this.instanceBuffer?.dispose();
-    this.device?.dispose();
+    this.renderer?.dispose();
+    this.renderer = null;
   }
 
   private async start(): Promise<void> {
@@ -93,7 +68,8 @@ export class DemoApp {
     }
 
     try {
-      const device = new WebGpuDevice(this.canvas, {
+      let reportedFirstFrame = false;
+      const renderer = new SeatRenderer(this.canvas, {
         onDeviceLost: (event) => {
           this.setStatus({
             state: 'lost',
@@ -107,44 +83,35 @@ export class DemoApp {
             reason: error.message,
           });
         },
+        onError: (error) => {
+          this.setStatus({
+            state: 'error',
+            reason: error.message,
+          });
+        },
+        onFrame: () => {
+          if (reportedFirstFrame) {
+            return;
+          }
+
+          reportedFirstFrame = true;
+          this.setStatus({
+            state: 'rendered',
+            backend: renderer.backendName(),
+            instanceCount: renderer.instanceCount,
+          });
+        },
       });
 
-      await device.initialize();
+      await renderer.initialize();
 
       if (this.disposed) {
-        device.dispose();
+        renderer.dispose();
         return;
       }
 
-      const instanceData = createDemoInstanceData(
-        this.options.rows ?? 100,
-        this.options.columns ?? 100,
-      );
-      const instanceBuffer = device.createBuffer({
-        label: 'demo-seat-instances',
-        sizeBytes: instanceData.data.byteLength,
-        usages: ['vertex', 'copy-dst'],
-        instanceStrideBytes: SEAT_INSTANCE_STRIDE_BYTES,
-      });
-
-      device.uploadBuffer(instanceBuffer, instanceData.data, {
-        dirtyRanges: [{ startInstance: 0, instanceCount: instanceData.instanceCount }],
-        instanceStrideBytes: SEAT_INSTANCE_STRIDE_BYTES,
-      });
-
-      const pipeline = await WebGpuSeatPipeline.create(device);
-
-      if (this.disposed) {
-        instanceBuffer.dispose();
-        device.dispose();
-        return;
-      }
-
-      this.device = device;
-      this.pipeline = pipeline;
-      this.instanceBuffer = instanceBuffer;
-      this.instanceData = instanceData;
-      this.render();
+      this.renderer = renderer;
+      renderer.loadDocument(this.createDemoDocument());
     } catch (error) {
       this.setStatus({
         state: 'error',
@@ -153,46 +120,17 @@ export class DemoApp {
     }
   }
 
-  private render(): void {
-    const device = this.device;
-    const pipeline = this.pipeline;
-    const instanceBuffer = this.instanceBuffer;
-    const instanceData = this.instanceData;
-
-    if (!device || !pipeline || !instanceBuffer || !instanceData) {
-      return;
-    }
+  private createDemoDocument(): SeatMapDocument {
+    const selection = parseFixtureSelection(this.options.search ?? window.location.search);
 
     try {
-      device.resize();
-      const drawingBufferSize = device.getDrawingBufferSize();
-      const viewProjection = createFitToBoundsViewProjection(
-        instanceData.bounds,
-        drawingBufferSize.width,
-        drawingBufferSize.height,
-      );
-      const uniformData = createSeatUniformData({
-        viewProjection,
-        palette: DEFAULT_SEAT_PALETTE,
+      return generateSeatMap({
+        layout: selection.layout,
+        seatCount: selection.seatCount,
+        seed: DEMO_FIXTURE_SEED,
       });
-
-      device.encodeDraw(
-        uniformData,
-        pipeline,
-        { instanceBuffer },
-        { startInstance: 0, instanceCount: instanceData.instanceCount },
-      );
-      device.submit();
-      this.setStatus({
-        state: 'rendered',
-        backend: 'webgpu',
-        instanceCount: instanceData.instanceCount,
-      });
-    } catch (error) {
-      this.setStatus({
-        state: 'error',
-        reason: error instanceof Error ? error.message : String(error),
-      });
+    } catch {
+      return createFallbackSeatMap();
     }
   }
 
@@ -209,88 +147,89 @@ export class DemoApp {
   }
 }
 
-function createDemoInstanceData(rows: number, columns: number): DemoInstanceData {
-  const instanceCount = rows * columns;
-  const buffer = new ArrayBuffer(instanceCount * SEAT_INSTANCE_STRIDE_BYTES);
-  const view = new DataView(buffer);
-  const spacing = 10;
-  const seatSize = 6.8;
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns; column += 1) {
-      const index = row * columns + column;
-      const byteOffset = index * SEAT_INSTANCE_STRIDE_BYTES;
-      const x = column * spacing;
-      const y = row * spacing;
-      let stateFlags = 0;
-
-      if (index % 41 === 0) {
-        stateFlags |= SEAT_STATE_FLAG_SELECTED;
-      }
-
-      if (index % 67 === 0) {
-        stateFlags |= SEAT_STATE_FLAG_HOVERED;
-      }
-
-      if (index % 13 === 0) {
-        stateFlags |= SEAT_STATE_FLAG_UNAVAILABLE;
-      }
-
-      view.setFloat32(byteOffset + SEAT_INSTANCE_X_OFFSET_BYTES, x, true);
-      view.setFloat32(byteOffset + SEAT_INSTANCE_Y_OFFSET_BYTES, y, true);
-      view.setFloat32(byteOffset + SEAT_INSTANCE_SIZE_OFFSET_BYTES, seatSize, true);
-      view.setFloat32(byteOffset + SEAT_INSTANCE_ROTATION_OFFSET_BYTES, 0, true);
-      view.setUint32(
-        byteOffset + SEAT_INSTANCE_COLOR_INDEX_OFFSET_BYTES,
-        (row + column) % SEAT_PALETTE_COLOR_COUNT,
-        true,
-      );
-      view.setUint32(byteOffset + SEAT_INSTANCE_STATE_FLAGS_OFFSET_BYTES, stateFlags, true);
-    }
-  }
+function parseFixtureSelection(search: string): FixtureSelection {
+  const params = new URLSearchParams(search);
+  const layoutParam = params.get('layout');
+  const layout =
+    layoutParam && DEMO_LAYOUTS.has(layoutParam as LayoutKind)
+      ? (layoutParam as LayoutKind)
+      : DEFAULT_LAYOUT;
 
   return {
-    data: new Uint8Array(buffer),
-    instanceCount,
-    bounds: {
-      minX: -spacing,
-      minY: -spacing,
-      maxX: (columns - 1) * spacing + spacing,
-      maxY: (rows - 1) * spacing + spacing,
-    },
+    layout,
+    seatCount: clampSeatCount(params.get('seats')),
   };
 }
 
-function createFitToBoundsViewProjection(
-  bounds: Bounds,
-  pixelWidth: number,
-  pixelHeight: number,
-): number[] {
-  const width = bounds.maxX - bounds.minX;
-  const height = bounds.maxY - bounds.minY;
-  const viewAspect = pixelWidth / pixelHeight;
-  const worldAspect = width / height;
-  let minX = bounds.minX;
-  let maxX = bounds.maxX;
-  let minY = bounds.minY;
-  let maxY = bounds.maxY;
+function clampSeatCount(value: string | null): number {
+  const parsed = value === null ? DEFAULT_SEAT_COUNT : Number(value);
 
-  if (viewAspect > worldAspect) {
-    const nextWidth = height * viewAspect;
-    const delta = (nextWidth - width) * 0.5;
-    minX -= delta;
-    maxX += delta;
-  } else {
-    const nextHeight = width / viewAspect;
-    const delta = (nextHeight - height) * 0.5;
-    minY -= delta;
-    maxY += delta;
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_SEAT_COUNT;
   }
 
-  const scaleX = 2 / (maxX - minX);
-  const scaleY = -2 / (maxY - minY);
-  const translateX = -(maxX + minX) / (maxX - minX);
-  const translateY = (maxY + minY) / (maxY - minY);
+  for (const seatCount of DEMO_SEAT_COUNTS) {
+    if (parsed <= seatCount) {
+      return seatCount;
+    }
+  }
 
-  return [scaleX, 0, 0, 0, 0, scaleY, 0, 0, 0, 0, 1, 0, translateX, translateY, 0, 1];
+  return DEMO_SEAT_COUNTS[DEMO_SEAT_COUNTS.length - 1];
+}
+
+function createFallbackSeatMap(): SeatMapDocument {
+  const rows = 100;
+  const columns = 100;
+  const spacing = 1;
+  const size = 0.7;
+  const categories: SeatCategory[] = [
+    { id: 'fallback-standard', name: 'Standard', color: '#2563eb' },
+    { id: 'fallback-premium', name: 'Premium', color: '#dc2626' },
+    { id: 'fallback-access', name: 'Access', color: '#16a34a' },
+  ];
+  const documentRows = [];
+
+  for (let row = 0; row < rows; row += 1) {
+    const seats: Seat[] = [];
+
+    for (let column = 0; column < columns; column += 1) {
+      const index = row * columns + column;
+      seats.push({
+        id: `fallback-r${row}-s${column}`,
+        label: `${column + 1}`,
+        x: column * spacing,
+        y: row * spacing,
+        size,
+        rotation: 0,
+        categoryIndex: index % categories.length,
+        status: index % 13 === 0 ? 'sold' : 'available',
+      });
+    }
+
+    documentRows.push({
+      id: `fallback-row-${row}`,
+      label: `${row + 1}`,
+      seats,
+    });
+  }
+
+  return {
+    id: 'fallback-grid-10000',
+    name: 'Fallback 10k grid',
+    bounds: {
+      minX: -size,
+      minY: -size,
+      maxX: (columns - 1) * spacing + size,
+      maxY: (rows - 1) * spacing + size,
+    },
+    categories,
+    sections: [
+      {
+        id: 'fallback-section',
+        name: 'Fallback Section',
+        transform: { x: 0, y: 0, rotation: 0 },
+        rows: documentRows,
+      },
+    ],
+  };
 }

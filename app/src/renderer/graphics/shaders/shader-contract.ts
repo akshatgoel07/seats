@@ -56,8 +56,15 @@ export const SEAT_PALETTE_COLOR_COUNT = 16;
 export const SEAT_PALETTE_COLOR_FLOATS = 4;
 export const SEAT_UNIFORM_PALETTE_OFFSET_BYTES =
   SEAT_UNIFORM_VIEW_PROJECTION_OFFSET_BYTES + SEAT_UNIFORM_VIEW_PROJECTION_FLOATS * 4;
-export const SEAT_UNIFORM_STRUCT_SIZE_BYTES =
+export const SEAT_UNIFORM_RENDER_OPTIONS_OFFSET_BYTES =
   SEAT_UNIFORM_PALETTE_OFFSET_BYTES + SEAT_PALETTE_COLOR_COUNT * SEAT_PALETTE_COLOR_FLOATS * 4;
+export const SEAT_UNIFORM_RENDER_OPTIONS_WORDS = 4;
+export const SEAT_UNIFORM_LOD_LEVEL_OFFSET_BYTES = SEAT_UNIFORM_RENDER_OPTIONS_OFFSET_BYTES;
+export const SEAT_UNIFORM_STRUCT_SIZE_BYTES =
+  SEAT_UNIFORM_RENDER_OPTIONS_OFFSET_BYTES + SEAT_UNIFORM_RENDER_OPTIONS_WORDS * 4;
+
+export const SEAT_LOD_DOTS = 0;
+export const SEAT_LOD_FULL_GLYPH = 1;
 
 export const IDENTITY_VIEW_PROJECTION_MATRIX = [
   1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
@@ -87,17 +94,46 @@ export type SeatPalette = readonly (readonly [number, number, number, number])[]
 export interface SeatUniformDataInput {
   readonly viewProjection: ReadonlyArray<number>;
   readonly palette?: SeatPalette;
+  readonly lodLevel?: number;
 }
 
 export function createSeatUniformData(input: SeatUniformDataInput): Uint8Array {
+  const buffer = new ArrayBuffer(SEAT_UNIFORM_STRUCT_SIZE_BYTES);
+  return writeSeatUniformData(new Uint8Array(buffer), input);
+}
+
+export function writeSeatUniformData(
+  target: Uint8Array,
+  input: SeatUniformDataInput,
+): Uint8Array {
   if (input.viewProjection.length !== SEAT_UNIFORM_VIEW_PROJECTION_FLOATS) {
     throw new Error(
       `Expected ${SEAT_UNIFORM_VIEW_PROJECTION_FLOATS} view-projection floats, received ${input.viewProjection.length}`,
     );
   }
 
-  const buffer = new ArrayBuffer(SEAT_UNIFORM_STRUCT_SIZE_BYTES);
-  const floats = new Float32Array(buffer);
+  if (target.byteLength !== SEAT_UNIFORM_STRUCT_SIZE_BYTES) {
+    throw new Error(
+      `Expected ${SEAT_UNIFORM_STRUCT_SIZE_BYTES} uniform bytes, received ${target.byteLength}`,
+    );
+  }
+
+  if (target.byteOffset % 4 !== 0) {
+    throw new Error('Seat uniform byte offset must be 4-byte aligned');
+  }
+
+  target.fill(0);
+
+  const floats = new Float32Array(
+    target.buffer,
+    target.byteOffset,
+    SEAT_UNIFORM_STRUCT_SIZE_BYTES / 4,
+  );
+  const words = new Uint32Array(
+    target.buffer,
+    target.byteOffset,
+    SEAT_UNIFORM_STRUCT_SIZE_BYTES / 4,
+  );
   const palette = input.palette ?? DEFAULT_SEAT_PALETTE;
 
   floats.set(input.viewProjection, SEAT_UNIFORM_VIEW_PROJECTION_OFFSET_BYTES / 4);
@@ -111,5 +147,7 @@ export function createSeatUniformData(input: SeatUniformDataInput): Uint8Array {
     floats[baseOffset + 3] = color[3];
   }
 
-  return new Uint8Array(buffer);
+  words[SEAT_UNIFORM_LOD_LEVEL_OFFSET_BYTES / 4] = input.lodLevel ?? SEAT_LOD_FULL_GLYPH;
+
+  return target;
 }
