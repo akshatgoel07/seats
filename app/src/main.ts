@@ -1,3 +1,5 @@
+import { DemoApp } from './app/DemoApp';
+
 const canvas = document.querySelector<HTMLCanvasElement>('#seat-canvas');
 
 if (!canvas) {
@@ -16,3 +18,6 @@ const resizeCanvas = () => {
 
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
+
+const app = new DemoApp(canvas);
+app.mount();

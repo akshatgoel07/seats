@@ -17,7 +17,14 @@ export default defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
-          args: ['--single-process', '--no-zygote', '--disable-gpu'],
+          args: [
+            '--single-process',
+            '--no-zygote',
+            '--enable-unsafe-webgpu',
+            '--enable-features=WebGPU',
+            '--disable-features=SkiaGraphite',
+            '--ignore-gpu-blocklist',
+          ],
         },
       },
     },
