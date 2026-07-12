@@ -1,0 +1,588 @@
+{
+  "generatedAt": "2026-07-12T11:27:01.155Z",
+  "gitShortHash": "4bdbbe8",
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+  "budgets": "goal-plan §4",
+  "runs": [
+    {
+      "layout": "stadium",
+      "seats": 1000,
+      "backend": "webgpu",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 75.9,
+        "panZoom": {
+          "avgFrameMs": 16.668,
+          "p95FrameMs": 17,
+          "minFps": 55.866
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.072,
+          "p95Ms": 0.2
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 1000,
+          "backend": "webgpu",
+          "timestamp": "2026-07-12T11:26:11.130Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 55"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "17.0ms ≤ 18.0"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "76ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.20ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 1000,
+      "backend": "webgl2",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 48.5,
+        "panZoom": {
+          "avgFrameMs": 16.668,
+          "p95FrameMs": 17.1,
+          "minFps": 56.497
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.034,
+          "p95Ms": 0.1
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 1000,
+          "backend": "webgl2",
+          "timestamp": "2026-07-12T11:26:16.408Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 30"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "17.1ms ≤ 33.3"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "49ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 10000,
+      "backend": "webgpu",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 38.1,
+        "panZoom": {
+          "avgFrameMs": 16.667,
+          "p95FrameMs": 16.9,
+          "minFps": 56.818
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0
+        },
+        "selectionToggle": {
+          "avgMs": 0.078,
+          "p95Ms": 0.2
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 10000,
+          "backend": "webgpu",
+          "timestamp": "2026-07-12T11:26:21.681Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 55"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "16.9ms ≤ 18.0"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "38ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.00ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.20ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 10000,
+      "backend": "webgl2",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 34.3,
+        "panZoom": {
+          "avgFrameMs": 16.668,
+          "p95FrameMs": 16.9,
+          "minFps": 56.497
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.048,
+          "p95Ms": 0.1
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 10000,
+          "backend": "webgl2",
+          "timestamp": "2026-07-12T11:26:26.956Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 30"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "16.9ms ≤ 33.3"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "34ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 100000,
+      "backend": "webgpu",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 92.1,
+        "panZoom": {
+          "avgFrameMs": 16.667,
+          "p95FrameMs": 16.9,
+          "minFps": 56.818
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.286,
+          "p95Ms": 0.4
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 100000,
+          "backend": "webgpu",
+          "timestamp": "2026-07-12T11:26:32.418Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 55"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "16.9ms ≤ 18.0"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "92ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.40ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 100000,
+      "backend": "webgl2",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 77.2,
+        "panZoom": {
+          "avgFrameMs": 16.667,
+          "p95FrameMs": 17,
+          "minFps": 56.497
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.227,
+          "p95Ms": 0.3
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 100000,
+          "backend": "webgl2",
+          "timestamp": "2026-07-12T11:26:37.920Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 30"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "17.0ms ≤ 33.3"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "77ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.30ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 250000,
+      "backend": "webgpu",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 189.7,
+        "panZoom": {
+          "avgFrameMs": 16.666,
+          "p95FrameMs": 16.8,
+          "minFps": 56.497
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.593,
+          "p95Ms": 0.7
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 250000,
+          "backend": "webgpu",
+          "timestamp": "2026-07-12T11:26:43.660Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 30"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "16.8ms ≤ 33.3"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.70ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "stadium",
+      "seats": 250000,
+      "backend": "webgl2",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 886.7,
+        "panZoom": {
+          "avgFrameMs": 16.667,
+          "p95FrameMs": 16.8,
+          "minFps": 56.497
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.593,
+          "p95Ms": 0.7
+        },
+        "meta": {
+          "layout": "stadium",
+          "seats": 250000,
+          "backend": "webgl2",
+          "timestamp": "2026-07-12T11:26:50.094Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 30"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "16.8ms ≤ 33.3"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.70ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "grid",
+      "seats": 100000,
+      "backend": "webgpu",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 98.6,
+        "panZoom": {
+          "avgFrameMs": 16.665,
+          "p95FrameMs": 17,
+          "minFps": 56.18
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.289,
+          "p95Ms": 0.4
+        },
+        "meta": {
+          "layout": "grid",
+          "seats": 100000,
+          "backend": "webgpu",
+          "timestamp": "2026-07-12T11:26:55.584Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 55"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "17.0ms ≤ 18.0"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "99ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.40ms ≤ 5"
+          }
+        ]
+      }
+    },
+    {
+      "layout": "grid",
+      "seats": 100000,
+      "backend": "webgl2",
+      "status": "done",
+      "results": {
+        "loadToFirstRenderMs": 69.4,
+        "panZoom": {
+          "avgFrameMs": 16.67,
+          "p95FrameMs": 17.1,
+          "minFps": 56.497
+        },
+        "hitTest": {
+          "p50Ms": 0,
+          "p95Ms": 0.1
+        },
+        "selectionToggle": {
+          "avgMs": 0.228,
+          "p95Ms": 0.3
+        },
+        "meta": {
+          "layout": "grid",
+          "seats": 100000,
+          "backend": "webgl2",
+          "timestamp": "2026-07-12T11:27:00.987Z",
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36"
+        }
+      },
+      "budget": {
+        "pass": true,
+        "checks": [
+          {
+            "label": "panZoom fps",
+            "pass": true,
+            "detail": "60.0fps ≥ 30"
+          },
+          {
+            "label": "panZoom p95 frame",
+            "pass": true,
+            "detail": "17.1ms ≤ 33.3"
+          },
+          {
+            "label": "load",
+            "pass": true,
+            "detail": "69ms ≤ 1000"
+          },
+          {
+            "label": "hitTest p95",
+            "pass": true,
+            "detail": "0.10ms ≤ 2"
+          },
+          {
+            "label": "selection p95",
+            "pass": true,
+            "detail": "0.30ms ≤ 5"
+          }
+        ]
+      }
+    }
+  ]
+}
